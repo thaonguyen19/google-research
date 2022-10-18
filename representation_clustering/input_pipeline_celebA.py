@@ -25,6 +25,7 @@ import jax
 import jax.numpy as jnp
 import ml_collections
 import numpy as np
+import os
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
@@ -299,8 +300,11 @@ def create_dataset_helper(dataset_builder,
     split = tfds.Split.TRAIN
     decoders = {"image": tfds.decode.SkipDecoding()}
   else:
-    split = tfds.Split.VALIDATION
+    split = tfds.Split.TRAIN #TODO: VALIDATION 
     decoders = None
+
+  #if not os.path.exists('/home/thao/tensorflow_datasets/celeb_a'):
+  #  dataset_builder.download_and_prepare()
   ds = dataset_builder.as_dataset(
       split=split,
       shuffle_files=False,
@@ -356,23 +360,23 @@ def create_datasets(config):
     and the evaluation dataset.
   """
   if config.dataset_name == "celeb_a":
-    dataset_builder = tfds.builder("celeb_a", try_gcs=True)
+    dataset_builder = tfds.builder("tf_flowers", try_gcs=True) #TODO
     num_classes = 2
     train_preprocess = preprocess_spec.PreprocessFn([
         DecodeAndRandomResizedCrop(resize_size=224),
         RandomFlipLeftRight(),
-        LabelMapping(),
+        #LabelMapping(), #TODO
     ],
                                                     only_jax_types=True)
     eval_preprocess = preprocess_spec.PreprocessFn([
         RescaleValues(),
         ResizeSmall(256),
         CentralCrop(224),
-        LabelMapping(),
+        #LabelMapping(), #TODO
     ],
                                                    only_jax_types=True)
   elif config.dataset_name == "imagenet2012":
-    dataset_builder = tfds.builder("imagenet2012", try_gcs=True)
+    dataset_builder = tfds.builder("imagenet2012:5.0.0", try_gcs=True)
     num_classes = 1000
     train_preprocess = preprocess_spec.PreprocessFn([
         DecodeAndRandomResizedCrop(resize_size=224),
@@ -403,7 +407,7 @@ def create_datasets(config):
                              config.per_device_batch_size))
 
   num_validation_examples = (
-      dataset_builder.info.splits["validation"].num_examples)
+      dataset_builder.info.splits["train"].num_examples) #TODO: "validation"
   eval_num_batches = None
   if config.eval_pad_last_batch:
     # This is doing some extra work to get exactly all 50k examples in the

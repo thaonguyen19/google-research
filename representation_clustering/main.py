@@ -29,7 +29,7 @@ import jax
 from ml_collections import config_flags
 import tensorflow as tf
 
-from representation_clustering import train
+import train
 
 FLAGS = flags.FLAGS
 

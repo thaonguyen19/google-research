@@ -26,8 +26,9 @@ def get_config():
   config.dataset_type = "entity13"
   config.shuffle_subclasses = False
   config.num_classes = -1
-  config.num_subclasses = 4
+  config.num_subclasses = -1
   config.loss_fn = "cross_entropy"
+  config.fine_grained_labels = True
   # This is the learning rate for batch size 256. The code scales it linearly
   # with the batch size. This is common for ImageNet and SGD.
   config.model_name = "resnet50"
@@ -45,7 +46,7 @@ def get_config():
   # Evaluates for a full epoch if num_eval_steps==-1. Set to a smaller value for
   # fast iteration when running train.train_and_eval() from a Colab.
   config.num_eval_steps = -1
-  config.per_device_batch_size = 64
+  config.per_device_batch_size = 256
   # If batches should be added to evaluate the entire dataset.
   config.eval_pad_last_batch = True
 

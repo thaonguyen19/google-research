@@ -35,11 +35,12 @@ import jax.numpy as jnp
 import ml_collections
 import numpy as np
 import optax
+import os
 import tensorflow as tf
 
-from representation_clustering import input_pipeline_breeds
-from representation_clustering import input_pipeline_celebA
-from representation_clustering import resnet_v1
+import input_pipeline_breeds
+import input_pipeline_celebA
+import resnet_v1
 
 
 class TrainState(train_state.TrainState):
