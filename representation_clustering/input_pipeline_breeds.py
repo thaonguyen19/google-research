@@ -400,13 +400,17 @@ def create_datasets(config):
   _, subclass_split, _ = ret
   train_subclasses = subclass_split[0]
   all_subclasses = list(itertools.chain(*train_subclasses))
+  new_label_map = {}
+
   if config.fine_grained_labels:
     num_classes = len(all_subclasses)
+    for super_idx, sub in enumerate(all_subclasses):
+      new_label_map.update({sub : super_idx})
   else:
     num_classes = len(train_subclasses)
-  new_label_map = {}
-  for super_idx, sub in enumerate(train_subclasses):
-    new_label_map.update({s: super_idx for s in sub})
+    for super_idx, sub in enumerate(train_subclasses):
+      new_label_map.update({s: super_idx for s in sub})
+  
   lookup_table = tf.lookup.StaticHashTable(
       initializer=tf.lookup.KeyValueTensorInitializer(
           keys=tf.constant(list(new_label_map.keys()), dtype=tf.int64),
@@ -415,31 +419,18 @@ def create_datasets(config):
       default_value=tf.constant(-1, dtype=tf.int64))
 
   dataset_builder = tfds.builder("imagenet2012:5.0.0", try_gcs=True)
-  if config.fine_grained_labels:
-    train_preprocess = preprocess_spec.PreprocessFn([
-      DecodeAndRandomResizedCrop(resize_size=224),
-      RandomFlipLeftRight()
-    ], only_jax_types=True)
-
-    eval_preprocess = preprocess_spec.PreprocessFn([
-      RescaleValues(),
-      ResizeSmall(256),
-      CentralCrop(224)
-    ], only_jax_types=True)
-
-  else:
-    train_preprocess = preprocess_spec.PreprocessFn([
+  train_preprocess = preprocess_spec.PreprocessFn([
       DecodeAndRandomResizedCrop(resize_size=224),
       RandomFlipLeftRight(),
       LabelMappingOp(lookup_table=lookup_table)
-    ], only_jax_types=True)
+  ], only_jax_types=True)
   
-    eval_preprocess = preprocess_spec.PreprocessFn([
+  eval_preprocess = preprocess_spec.PreprocessFn([
       RescaleValues(),
       ResizeSmall(256),
       CentralCrop(224),
       LabelMappingOp(lookup_table=lookup_table)
-    ], only_jax_types=True)
+  ], only_jax_types=True)
 
   train_ds, num_train_examples = create_dataset_helper(
       dataset_builder,

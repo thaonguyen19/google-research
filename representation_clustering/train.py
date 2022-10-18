@@ -419,10 +419,10 @@ def train_and_evaluate(config, workdir):
       # Quick indication that training is happening.
       # logging.log_first_n(logging.INFO, "Finished training step %d.", 5, step)
       for hook_idx, h in enumerate(hooks):
-        if hook_idx == 0:
-          logging.info("reporting progress at step %d", step)
-        else:
-          logging.info("profiling at step %d", step)
+        #if hook_idx == 0:
+        #  logging.info("reporting progress at step %d", step)
+        #else:
+        #  logging.info("profiling at step %d", step)
         h(step)
 
       if step % config.log_loss_every_steps == 0 or is_last_step:
