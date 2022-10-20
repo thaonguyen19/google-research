@@ -437,7 +437,7 @@ def create_datasets(config):
       data_rng=None,
       filter_fn=functools.partial(predicate, all_subclasses=all_subclasses),
       preprocess_fn=train_preprocess,
-      cache=False,
+      cache=True,
       shuffle_buffer_size=config.shuffle_buffer_size,
       batch_dims=[jax.local_device_count(), config.per_device_batch_size],
       shuffle=True,
