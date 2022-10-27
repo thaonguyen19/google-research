@@ -28,10 +28,10 @@ def get_config():
   config.num_classes = -1
   config.num_subclasses = -1
   config.loss_fn = "cross_entropy"
-  config.fine_grained_labels = True
+  config.fine_grained_labels = False
   # This is the learning rate for batch size 256. The code scales it linearly
   # with the batch size. This is common for ImageNet and SGD.
-  config.model_name = "resnet50"
+  config.model_name = "vgg16"
   config.learning_rate = 0.1
   config.learning_rate_schedule = "cosine"
   config.warmup_epochs = 5

@@ -41,6 +41,7 @@ import tensorflow as tf
 import input_pipeline_breeds
 import input_pipeline_celebA
 import resnet_v1
+import vgg
 
 
 class TrainState(train_state.TrainState):
@@ -91,10 +92,17 @@ def create_train_state(
     model_cls = resnet_v1.ResNet18
   elif config.model_name == "resnet50":
     model_cls = resnet_v1.ResNet50
+  elif config.model_name == "vgg16":
+    model_cls = vgg.VGG16
+  elif config.model_name == "vgg19":
+    model_cls = vgg.VGG19
   else:
     raise ValueError(f"Model {config.model_name} not supported.")
-  model = model_cls(num_classes=num_classes,
-                    batch_norm_decay=config.batch_norm_decay)
+  if "resnet" in config.model_name:
+    model = model_cls(num_classes=num_classes,
+                      batch_norm_decay=config.batch_norm_decay)
+  else:
+    model = model_cls(num_classes=num_classes)
   variables = model.init(rng, jnp.ones(input_shape), train=False)
   params = variables["params"]
   batch_stats = variables["batch_stats"]
