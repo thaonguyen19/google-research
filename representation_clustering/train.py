@@ -32,6 +32,7 @@ import flax.linen as nn
 from flax.training import train_state
 import jax
 import jax.numpy as jnp
+from jax import random
 import ml_collections
 import numpy as np
 import optax
@@ -105,7 +106,10 @@ def create_train_state(
     model = model_cls(num_classes=num_classes)
   variables = model.init(rng, jnp.ones(input_shape), train=False)
   params = variables["params"]
-  batch_stats = variables["batch_stats"]
+  if "batch_stats" in variables:
+    batch_stats = variables["batch_stats"]
+  else:
+    batch_stats = {'':{'': 0}}
   parameter_overview.log_parameter_overview(params)
   tx = optax.sgd(
       learning_rate=learning_rate_fn,
@@ -191,7 +195,7 @@ def get_learning_rate(step,
 
 def train_step(model, state, batch,
                learning_rate_fn, weight_decay,
-               loss_fn):
+               loss_fn, dropout_rng=None):
   """Perform a single training step.
 
   Args:
@@ -209,11 +213,13 @@ def train_step(model, state, batch,
     The new model state and dictionary with metrics.
   """
   lr = learning_rate_fn(state.step)
+  dropout_rng = jax.random.fold_in(dropout_rng, state.step)
 
   def loss_function(params):
     variables = {"params": params, "batch_stats": state.batch_stats}
     logits, new_variables = model.apply(
-        variables, batch["image"], mutable=["batch_stats"], train=True)
+        variables, batch["image"], mutable=["batch_stats"], train=True,
+        rngs={'dropout': dropout_rng})
     if loss_fn == "cross_entropy":
       loss = jnp.mean(cross_entropy_loss(logits=logits, labels=batch["label"]))
     elif loss_fn == "squared":
@@ -313,7 +319,6 @@ def evaluate(model,
   eval_metrics = None
   with StepTraceContextHelper("eval", 0) as trace_context:
     for step, batch in enumerate(eval_ds):  # pytype: disable=wrong-arg-types
-      logging.info("Eval step %d", step)
       batch = jax.tree_map(np.asarray, batch)
       metrics_update = flax_utils.unreplicate(
           eval_step(model, state, batch, loss_fn))
@@ -374,6 +379,7 @@ def train_and_evaluate(config, workdir):
 
   # Initialize model.
   rng, model_rng = jax.random.split(rng)
+  dropout_rngs = random.split(rng, jax.local_device_count())
   model, state = create_train_state(
       config, model_rng, input_shape=(8, 224, 224, 3), num_classes=num_classes,
       learning_rate_fn=learning_rate_fn)
@@ -418,7 +424,7 @@ def train_and_evaluate(config, workdir):
 
       with jax.profiler.StepTraceAnnotation("train", step_num=step):
         batch = jax.tree_map(np.asarray, next(train_iter))
-        state, metrics_update = p_train_step(state=state, batch=batch)
+        state, metrics_update = p_train_step(state=state, batch=batch, dropout_rng=dropout_rngs)
         metric_update = flax_utils.unreplicate(metrics_update)
         train_metrics = (
             metric_update
@@ -441,7 +447,8 @@ def train_and_evaluate(config, workdir):
       if step % config.eval_every_steps == 0 or is_last_step:
         logging.info("Writing eval metrics at step %d", step)
         with report_progress.timed("eval"):
-          state = merge_batch_stats(config, state)
+          if 'resnet' in config.model_name:
+            state = merge_batch_stats(config, state)
           eval_metrics = evaluate(model, state, eval_ds, config.num_eval_steps,
                                   config.loss_fn)
         eval_metrics_cpu = jax.tree_map(np.array, eval_metrics.compute())
@@ -450,7 +457,8 @@ def train_and_evaluate(config, workdir):
       if step % (steps_per_epoch * 5) == 0 or is_last_step:
         logging.info("Writing checkpoint at step %d", step)
         with report_progress.timed("checkpoint"):
-          state = merge_batch_stats(config, state)
+          if 'resnet' in config.model_name:
+            state = merge_batch_stats(config, state)
           ckpt.save(flax_utils.unreplicate(state))
 
   logging.info("Finishing training at step %d", num_train_steps)

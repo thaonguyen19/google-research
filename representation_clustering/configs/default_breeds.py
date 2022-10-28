@@ -46,7 +46,7 @@ def get_config():
   # Evaluates for a full epoch if num_eval_steps==-1. Set to a smaller value for
   # fast iteration when running train.train_and_eval() from a Colab.
   config.num_eval_steps = -1
-  config.per_device_batch_size = 128
+  config.per_device_batch_size = 32
   # If batches should be added to evaluate the entire dataset.
   config.eval_pad_last_batch = True
 
