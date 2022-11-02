@@ -32,7 +32,7 @@ def get_config():
   # This is the learning rate for batch size 256. The code scales it linearly
   # with the batch size. This is common for ImageNet and SGD.
   config.model_name = "vgg16"
-  config.learning_rate = 0.1
+  config.learning_rate = 0.01
   config.learning_rate_schedule = "cosine"
   config.warmup_epochs = 5
   config.sgd_momentum = 0.9
