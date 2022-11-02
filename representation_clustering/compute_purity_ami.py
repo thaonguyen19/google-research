@@ -34,7 +34,7 @@ def compute_purity(clusters, classes):
   return purity
 
 
-#JIT
+@functools.partial(jax.jit, static_argnums=(0,))
 def predict(model, state, batch):
   """Get intermediate representations from a model."""
   #print(state.params)
@@ -128,7 +128,7 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses):
 
 
 def evaluate_purity_across_layers():
-  dataset_type = "living17"
+  dataset_type = "entity13"
   eval_ds, num_classes, train_subclasses = load_eval_ds(dataset_type, -1, -1, False)
   config = get_config()
   learning_rate_fn = functools.partial(
@@ -143,14 +143,14 @@ def evaluate_purity_across_layers():
   state = checkpoints.restore_checkpoint(checkpoint_path, state)
   print("step:", state.step)
 
-  metric_name = "purity"
-  for stage_prefix in ['conv1', 'conv2', 'conv3', 'conv4', 'conv5', 'fc']:
+  metric_name = "ami"
+  for stage_prefix in ['conv1_1', 'conv1_2', 'conv2_1', 'conv2_2', 'conv3', 'conv4', 'conv5', 'fc']:
     all_layer_intermediates = {}
     all_subclass_labels = []
     for step, batch in enumerate(eval_ds):
       if step % 50 == 0:
         print("Step:", step)
-      intermediates = predict(model, state, batch)
+      intermediates = predict(model, state, {k: jax.numpy.asarray(v) for k, v in batch.items()})
       labels = batch['label'].numpy()
       bs = labels.shape[0]
       all_subclass_labels.append(labels)
@@ -163,7 +163,8 @@ def evaluate_purity_across_layers():
         if key not in all_layer_intermediates:
           all_layer_intermediates[key] = []
         all_layer_intermediates[key].append(np.array(intermediates[key]['__call__'][0]).reshape(bs, -1))
-    print(all_layer_intermediates.keys())
+    for k, v in all_layer_intermediates.items():
+      print(k, v[0].shape)
 
     all_subclass_labels = np.hstack(all_subclass_labels)
     print(all_subclass_labels.shape)
@@ -174,7 +175,7 @@ def evaluate_purity_across_layers():
       print(key, all_intermediates.shape)
       result_dict = {}
 
-      for overcluster_factor in [5]:
+      for overcluster_factor in [1, 2, 3, 4, 5]:
         all_clfs = []
 
         for subclasses in train_subclasses:
