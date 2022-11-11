@@ -26,7 +26,7 @@ def get_config():
   config.dataset_type = "entity13"
   config.shuffle_subclasses = False
   config.num_classes = -1
-  config.num_subclasses = -1
+  config.num_subclasses = 4
   config.loss_fn = "cross_entropy"
   config.fine_grained_labels = False
   # This is the learning rate for batch size 256. The code scales it linearly

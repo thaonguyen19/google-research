@@ -6,6 +6,7 @@ import urllib
 from collections import OrderedDict, Counter
 import operator
 import networkx as nx
+import pickle
 #from ..datasets import DATASETS
 
 REQUIRED_FILES = ['dataset_class_info.json',
@@ -482,15 +483,29 @@ def print_dataset_info(superclasses,
 
 # Some standard datasets from the BREEDS paper.
 def make_breeds_dataset(dataset_type, info_dir, info_dir2, num_classes, num_subclasses, shuffle_subclasses, split=None):
-    # TODO
-    if dataset_type == 'entity13':
-        return make_entity13(info_dir, split)
-    elif dataset_type == 'entity30':
-        return make_entity30(info_dir, split)
-    elif dataset_type == 'nonliving26':
-        return make_nonliving26(info_dir, split)
-    elif dataset_type == 'living17':
-        return make_living17(info_dir, split)
+    if num_subclasses > 0:
+        pkl_file = f'/home/thao/make_{dataset_type}_{num_subclasses}_subclasses.pkl'
+        if shuffle_subclasses:
+            pkl_file = pkl_file.replace('.pkl', '_shuffle.pkl')
+        print(f"######################## LOADING {pkl_file}")
+        with open(pkl_file, 'rb') as f:
+            return pickle.load(f)
+    elif num_classes > 0:
+        pkl_file = f'/home/thao/make_{dataset_type}_{num_classes}_classes.pkl'
+        if shuffle_subclasses:
+            pkl_file = pkl_file.replace('.pkl', '_shuffle.pkl')
+        print(f"######################## LOADING {pkl_file}")
+        with open(pkl_file, 'rb') as f:
+            return pickle.load(f)
+    else:
+        if dataset_type == 'entity13': 
+            return make_entity13(info_dir, split)
+        elif dataset_type == 'entity30':
+            return make_entity30(info_dir, split)
+        elif dataset_type == 'nonliving26':
+            return make_nonliving26(info_dir, split)
+        elif dataset_type == 'living17':
+            return make_living17(info_dir, split)
 
 
 def make_entity13(info_dir, split=None):
