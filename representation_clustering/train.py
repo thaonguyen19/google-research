@@ -103,7 +103,8 @@ def create_train_state(
     model = model_cls(num_classes=num_classes,
                       batch_norm_decay=config.batch_norm_decay)
   else:
-    model = model_cls(num_classes=num_classes)
+    model = model_cls(num_classes=num_classes, include_bn=config.include_bn,
+                      batch_norm_decay=config.batch_norm_decay)
   variables = model.init(rng, jnp.ones(input_shape), train=False)
   params = variables["params"]
   if "batch_stats" in variables:

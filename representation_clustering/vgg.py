@@ -53,8 +53,11 @@ class VGG(nn.Module):
     bias_init: functools.partial=nn.initializers.zeros
     ckpt_dir: str=None
     dtype: str='float32'
+    include_bn: bool=False
+    batch_norm_decay: float = 0.9
 
     def setup(self):
+        print("INCLUDE BN:", self.include_bn)
         self.param_dict = None
 
     @nn.compact
@@ -96,29 +99,33 @@ class VGG(nn.Module):
             num_classes = self.num_classes
 
         act = {}
+        if self.include_bn:
+            norm = functools.partial(nn.BatchNorm, use_running_average=not train, momentum=self.batch_norm_decay)
+        else:
+            norm = None
 
-        x = self._conv_block(x, features=64, num_layers=2, block_num=1, act=act, dtype=self.dtype)
+        x = self._conv_block(x, features=64, num_layers=2, block_num=1, act=act, dtype=self.dtype, bn=norm)
         x = nn.max_pool(x, window_shape=(2, 2), strides=(2, 2))
 
-        x = self._conv_block(x, features=128, num_layers=2, block_num=2, act=act, dtype=self.dtype)
+        x = self._conv_block(x, features=128, num_layers=2, block_num=2, act=act, dtype=self.dtype, bn=norm)
         x = nn.max_pool(x, window_shape=(2, 2), strides=(2, 2))
 
-        x = self._conv_block(x, features=256, num_layers=3 if self.architecture == 'vgg16' else 4, block_num=3, act=act, dtype=self.dtype)
+        x = self._conv_block(x, features=256, num_layers=3 if self.architecture == 'vgg16' else 4, block_num=3, act=act, dtype=self.dtype, bn=norm)
         x = nn.max_pool(x, window_shape=(2, 2), strides=(2, 2))
 
-        x = self._conv_block(x, features=512, num_layers=3 if self.architecture == 'vgg16' else 4, block_num=4, act=act, dtype=self.dtype)
+        x = self._conv_block(x, features=512, num_layers=3 if self.architecture == 'vgg16' else 4, block_num=4, act=act, dtype=self.dtype, bn=norm)
         x = nn.max_pool(x, window_shape=(2, 2), strides=(2, 2))
 
-        x = self._conv_block(x, features=512, num_layers=3 if self.architecture == 'vgg16' else 4, block_num=5, act=act, dtype=self.dtype)
+        x = self._conv_block(x, features=512, num_layers=3 if self.architecture == 'vgg16' else 4, block_num=5, act=act, dtype=self.dtype, bn=norm)
         x = nn.max_pool(x, window_shape=(2, 2), strides=(2, 2))
 
         if self.include_head:
             # NCHW format because weights are from pytorch
             x = jnp.transpose(x, axes=(0, 3, 1, 2))
             x = jnp.reshape(x, (-1, x.shape[1] * x.shape[2] * x.shape[3]))
-            x = self._fc_block(x, features=4096, block_num=6, relu=True, dropout=True, act=act, train=train, dtype=self.dtype)
-            x = self._fc_block(x, features=4096, block_num=7, relu=True, dropout=True, act=act, train=train, dtype=self.dtype)
-            x = self._fc_block(x, features=num_classes, block_num=8, relu=False, dropout=False, act=act, train=train, dtype=self.dtype)
+            x = self._fc_block(x, features=4096, block_num=6, relu=True, dropout=True, act=act, train=train, dtype=self.dtype, bn=norm)
+            x = self._fc_block(x, features=4096, block_num=7, relu=True, dropout=True, act=act, train=train, dtype=self.dtype, bn=norm)
+            x = self._fc_block(x, features=num_classes, block_num=8, relu=False, dropout=False, act=act, train=train, dtype=self.dtype, bn=norm)
 
         if self.output == 'activations':
             return act 
@@ -129,23 +136,27 @@ class VGG(nn.Module):
             x = nn.log_softmax(x)
         return x
 
-    def _conv_block(self, x, features, num_layers, block_num, act, dtype='float32'):
+    def _conv_block(self, x, features, num_layers, block_num, act, dtype='float32', bn=None):
         for l in range(num_layers):
             layer_name = f'conv{block_num}_{l + 1}'
             w = self.kernel_init if self.param_dict is None else lambda *_ : jnp.array(self.param_dict[layer_name]['weight']) 
             b = self.bias_init if self.param_dict is None else lambda *_ : jnp.array(self.param_dict[layer_name]['bias']) 
             x = nn.Conv(features=features, kernel_size=(3, 3), kernel_init=w, bias_init=b, padding='same', name=layer_name, dtype=dtype)(x)
             act[layer_name] = x
+            if bn is not None:
+                x = bn(name=f"bn{block_num}_{l+1}")(x)
             x = nn.relu(x)
             act[f'relu{block_num}_{l + 1}'] = x
         return x
 
-    def _fc_block(self, x, features, block_num, act, relu=False, dropout=False, train=True, dtype='float32'):
+    def _fc_block(self, x, features, block_num, act, relu=False, dropout=False, train=True, dtype='float32', bn=None):
         layer_name = f'fc{block_num}'
         w = self.kernel_init if self.param_dict is None else lambda *_ : jnp.array(self.param_dict[layer_name]['weight']) 
         b = self.bias_init if self.param_dict is None else lambda *_ : jnp.array(self.param_dict[layer_name]['bias']) 
         x = nn.Dense(features=features, kernel_init=w, bias_init=b, name=layer_name, dtype=dtype)(x)
         act[layer_name] = x
+        if bn is not None:
+            x = bn(name=f"bn{block_num}")(x)
         if relu:
             x = nn.relu(x)
             act[f'relu{block_num}'] = x
