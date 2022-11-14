@@ -6,7 +6,7 @@ import tensorflow_datasets as tfds
 import jax
 from clu import preprocess_spec
 from train import create_train_state
-from input_pipeline_breeds import predicate, RescaleValues, ResizeSmall, CentralCrop
+from input_pipeline_breeds import predicate, RescaleValues, ResizeSmall, CentralCrop, LabelMappingOp
 from flax.training import checkpoints
 import breeds_helpers
 from configs.default_breeds import get_config
@@ -73,7 +73,7 @@ def get_learning_rate(step: int,
   return lr * warmup
 
 
-def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses):
+def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, lookup_labels=False):
   ret = breeds_helpers.make_breeds_dataset(
       dataset_type,
       BREEDS_INFO_DIR,
@@ -87,8 +87,8 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses):
   num_classes = len(train_subclasses)
   all_subclasses = list(itertools.chain(*train_subclasses))
   new_label_map = {}
-  for subclass_idx, sub in enumerate(all_subclasses):
-    new_label_map.update({sub: subclass_idx})
+  for super_idx, sub in enumerate(train_subclasses):
+    new_label_map.update({s: super_idx for s in sub})
   print(new_label_map)
   lookup_table = tf.lookup.StaticHashTable(
       initializer=tf.lookup.KeyValueTensorInitializer(
@@ -98,13 +98,19 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses):
       default_value=tf.constant(-1, dtype=tf.int64))
 
   dataset_builder = tfds.builder("imagenet2012:5.0.0", try_gcs=True)
-  eval_preprocess = preprocess_spec.PreprocessFn([
+  if lookup_labels:
+    eval_preprocess = preprocess_spec.PreprocessFn([
+          RescaleValues(),
+          ResizeSmall(256),
+          CentralCrop(224),
+          LabelMappingOp(lookup_table=lookup_table)
+          ], only_jax_types=True)
+  else:
+    eval_preprocess = preprocess_spec.PreprocessFn([
       RescaleValues(),
       ResizeSmall(256),
       CentralCrop(224),
-      #LabelMappingOp(lookup_table=lookup_table)
       ], only_jax_types=True)
-
 
   dataset_options = tf.data.Options()
   dataset_options.experimental_optimization.map_parallelization = True
@@ -129,7 +135,7 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses):
 
 def evaluate_purity_across_layers():
   dataset_type = "entity13"
-  eval_ds, num_classes, train_subclasses = load_eval_ds(dataset_type, -1, -1, False)
+  eval_ds, num_classes, train_subclasses = load_eval_ds(dataset_type, -1, 4, False)
   config = get_config()
   learning_rate_fn = functools.partial(
       get_learning_rate,
@@ -137,13 +143,13 @@ def evaluate_purity_across_layers():
       steps_per_epoch=40,
       num_epochs=config.num_epochs,
       warmup_epochs=config.warmup_epochs)
-  model_dir = f"gs://representation_clustering/{dataset_type}_vgg16/"
+  model_dir = f"gs://representation_clustering/{dataset_type}_4_subclasses_vgg16/"
   checkpoint_path = os.path.join(model_dir, 'checkpoints-0/ckpt-81.flax')
   model, state = create_train_state(config, jax.random.PRNGKey(0), input_shape=(8, 224, 224, 3), num_classes=num_classes, learning_rate_fn=learning_rate_fn)
   state = checkpoints.restore_checkpoint(checkpoint_path, state)
   print("step:", state.step)
 
-  metric_name = "ami"
+  metric_name = "purity"
   for stage_prefix in ['conv1_1', 'conv1_2', 'conv2_1', 'conv2_2', 'conv3', 'conv4', 'conv5', 'fc']:
     all_layer_intermediates = {}
     all_subclass_labels = []
