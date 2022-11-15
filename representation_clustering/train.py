@@ -104,6 +104,7 @@ def create_train_state(
                       batch_norm_decay=config.batch_norm_decay)
   else:
     model = model_cls(num_classes=num_classes, include_bn=config.include_bn,
+                      include_ln=config.include_ln,
                       batch_norm_decay=config.batch_norm_decay)
   variables = model.init(rng, jnp.ones(input_shape), train=False)
   params = variables["params"]
