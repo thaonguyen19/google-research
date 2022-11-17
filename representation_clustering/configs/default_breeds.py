@@ -24,7 +24,7 @@ def get_config():
 
   config.dataset_name = "breeds"
   config.dataset_type = "entity13"
-  config.shuffle_subclasses = False
+  config.shuffle_subclasses = True
   config.num_classes = -1
   config.num_subclasses = 4
   config.loss_fn = "cross_entropy"
@@ -35,7 +35,7 @@ def get_config():
   if config.model_name == "vgg16":
     config.learning_rate = 0.01
     config.include_bn = False
-    config.include_ln = True
+    config.include_ln = False
   else:
     config.learning_rate = 0.1
   config.learning_rate_schedule = "cosine"
