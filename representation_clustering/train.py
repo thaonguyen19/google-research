@@ -38,6 +38,7 @@ import numpy as np
 import optax
 import os
 import tensorflow as tf
+import time
 
 import input_pipeline_breeds
 import input_pipeline_celebA
@@ -457,9 +458,12 @@ def train_and_evaluate(config, workdir):
 
       if step % (steps_per_epoch * 5) == 0 or is_last_step:
         logging.info("Writing checkpoint at step %d", step)
+        start_t = time.time()
         with report_progress.timed("checkpoint"):
           if 'resnet' in config.model_name:
             state = merge_batch_stats(config, state)
           ckpt.save(flax_utils.unreplicate(state))
+        end_t = time.time()
+        logging.info("Total time to save ckpt %f", end_t-start_t)
 
   logging.info("Finishing training at step %d", num_train_steps)
