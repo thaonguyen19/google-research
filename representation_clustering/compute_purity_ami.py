@@ -6,7 +6,7 @@ import tensorflow_datasets as tfds
 import jax
 from clu import preprocess_spec
 from train import create_train_state
-from input_pipeline_breeds import predicate, RescaleValues, ResizeSmall, CentralCrop
+from input_pipeline_breeds import predicate, RescaleValues, ResizeSmall, CentralCrop, LabelMappingOp
 from flax.training import checkpoints
 import breeds_helpers
 from configs.default_breeds import get_config
@@ -73,7 +73,7 @@ def get_learning_rate(step: int,
   return lr * warmup
 
 
-def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses):
+def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, lookup_labels=False):
   ret = breeds_helpers.make_breeds_dataset(
       dataset_type,
       BREEDS_INFO_DIR,
@@ -87,8 +87,8 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses):
   num_classes = len(train_subclasses)
   all_subclasses = list(itertools.chain(*train_subclasses))
   new_label_map = {}
-  for subclass_idx, sub in enumerate(all_subclasses):
-    new_label_map.update({sub: subclass_idx})
+  for super_idx, sub in enumerate(train_subclasses):
+    new_label_map.update({s: super_idx for s in sub})
   print(new_label_map)
   lookup_table = tf.lookup.StaticHashTable(
       initializer=tf.lookup.KeyValueTensorInitializer(
@@ -98,13 +98,19 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses):
       default_value=tf.constant(-1, dtype=tf.int64))
 
   dataset_builder = tfds.builder("imagenet2012:5.0.0", try_gcs=True)
-  eval_preprocess = preprocess_spec.PreprocessFn([
+  if lookup_labels:
+    eval_preprocess = preprocess_spec.PreprocessFn([
+          RescaleValues(),
+          ResizeSmall(256),
+          CentralCrop(224),
+          LabelMappingOp(lookup_table=lookup_table)
+          ], only_jax_types=True)
+  else:
+    eval_preprocess = preprocess_spec.PreprocessFn([
       RescaleValues(),
       ResizeSmall(256),
       CentralCrop(224),
-      #LabelMappingOp(lookup_table=lookup_table)
       ], only_jax_types=True)
-
 
   dataset_options = tf.data.Options()
   dataset_options.experimental_optimization.map_parallelization = True
@@ -118,7 +124,7 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses):
       read_config=read_config,
       decoders=None)
 
-  batch_size = 32
+  batch_size = 16
   eval_ds = eval_ds.filter(functools.partial(predicate, all_subclasses=all_subclasses))
   eval_ds = eval_ds.cache()
   eval_ds = eval_ds.map(eval_preprocess, num_parallel_calls=tf.data.experimental.AUTOTUNE)
@@ -129,7 +135,12 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses):
 
 def evaluate_purity_across_layers():
   dataset_type = "entity13"
-  eval_ds, num_classes, train_subclasses = load_eval_ds(dataset_type, -1, -1, False)
+  shuffle_subclasses = True
+  model_dir = f"gs://representation_clustering/{dataset_type}_4_subclasses_shuffle_vgg16/"
+  if "shuffle" in model_dir:
+    assert(shuffle_subclasses == True)
+  
+  eval_ds, num_classes, train_subclasses = load_eval_ds(dataset_type, -1, 4, shuffle_subclasses)
   config = get_config()
   learning_rate_fn = functools.partial(
       get_learning_rate,
@@ -137,13 +148,13 @@ def evaluate_purity_across_layers():
       steps_per_epoch=40,
       num_epochs=config.num_epochs,
       warmup_epochs=config.warmup_epochs)
-  model_dir = f"gs://representation_clustering/{dataset_type}_vgg16/"
   checkpoint_path = os.path.join(model_dir, 'checkpoints-0/ckpt-81.flax')
   model, state = create_train_state(config, jax.random.PRNGKey(0), input_shape=(8, 224, 224, 3), num_classes=num_classes, learning_rate_fn=learning_rate_fn)
   state = checkpoints.restore_checkpoint(checkpoint_path, state)
   print("step:", state.step)
 
-  metric_name = "ami"
+  normalize_embeddings = True
+  print(f"-------------------------- EVALUATING, normalize_embeddings={normalize_embeddings}")
   for stage_prefix in ['conv1_1', 'conv1_2', 'conv2_1', 'conv2_2', 'conv3', 'conv4', 'conv5', 'fc']:
     all_layer_intermediates = {}
     all_subclass_labels = []
@@ -173,7 +184,8 @@ def evaluate_purity_across_layers():
       n_subclasses = len(train_subclasses[0])
       all_intermediates = np.vstack(all_intermediates)
       print(key, all_intermediates.shape)
-      result_dict = {}
+      purity_result_dict, ami_result_dict = {}, {}
+      clf_labels_dict = {}
 
       for overcluster_factor in [1, 2, 3, 4, 5]:
         all_clfs = []
@@ -185,7 +197,7 @@ def evaluate_purity_across_layers():
           all_clfs.append(hier_clustering)
 
 
-        metric_list = []
+        purity_metric_list, ami_metric_list, clf_labels_list = [], [], []
         all_clf_labels = []
         for i, clf in enumerate(all_clfs):
           all_clf_labels.append(clf.labels_)
@@ -195,27 +207,33 @@ def evaluate_purity_across_layers():
               if all_subclass_labels[i] in subclasses
           ])
           subclass_labels = all_subclass_labels[subclass_idx]
-          if metric_name == 'purity':
-            metric = compute_purity(clf.labels_, subclass_labels)
-          elif metric_name == 'ami':
-            metric = adjusted_mutual_info_score(subclass_labels, clf.labels_)
-          metric_list.append(metric)
+          purity_metric = compute_purity(clf.labels_, subclass_labels)
+          ami_metric = adjusted_mutual_info_score(subclass_labels, clf.labels_)
+          purity_metric_list.append(purity_metric)
+          ami_metric_list.append(ami_metric)
+          clf_labels_list.append(clf.labels_)
 
-        result_dict[overcluster_factor] = metric_list
+        purity_result_dict[overcluster_factor] = purity_metric_list
+        ami_result_dict[overcluster_factor] = ami_metric_list
+        clf_labels_dict[overcluster_factor] = clf_labels_list
 
-      print(result_dict)
+      print(purity_result_dict)
+      print(ami_result_dict)
       gcloud_fs = pyfs.open_fs(model_dir)
-      if metric_name == "purity":
-        metric_outfile = f'class_purity_ckpt_{key}.pkl'
-        clf_label_outfile = f'clf_labels_ckpt_{key}.pkl'
-        with gcloud_fs.open(metric_outfile, 'wb') as f:
-          pickle.dump(metric_list, f)
-        with gcloud_fs.open(clf_label_outfile, 'wb') as f:
-          pickle.dump(all_clf_labels, f)
+      if normalize_embeddings:
+        with gcloud_fs.open(f'class_purity_ckpt_{key}_normalized.pkl', 'wb') as f:
+          pickle.dump(purity_result_dict, f)
+        with gcloud_fs.open(f'clf_labels_ckpt_{key}_normalized.pkl', 'wb') as f:
+          pickle.dump(clf_labels_dict, f)  
+        with gcloud_fs.open(f'adjusted_mutual_info_ckpt_{key}_normalized.pkl', 'wb') as f:
+          pickle.dump(ami_result_dict, f)
       else:
-        metric_outfile = f'adjusted_mutual_info_ckpt_{key}.pkl'
-        with gcloud_fs.open(metric_outfile, 'wb') as f:
-          pickle.dump(result_dict, f)
+        with gcloud_fs.open(f'class_purity_ckpt_{key}.pkl', 'wb') as f:
+          pickle.dump(purity_result_dict, f)
+        with gcloud_fs.open(f'clf_labels_ckpt_{key}.pkl', 'wb') as f:
+          pickle.dump(clf_labels_dict, f) 
+        with gcloud_fs.open(f'adjusted_mutual_info_ckpt_{key}.pkl', 'wb') as f:
+          pickle.dump(ami_result_dict, f)
 
 if __name__ == "__main__":
   evaluate_purity_across_layers()

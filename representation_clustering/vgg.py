@@ -54,6 +54,7 @@ class VGG(nn.Module):
     ckpt_dir: str=None
     dtype: str='float32'
     include_bn: bool=False
+    include_ln: bool=False
     batch_norm_decay: float = 0.9
 
     def setup(self):
@@ -101,6 +102,8 @@ class VGG(nn.Module):
         act = {}
         if self.include_bn:
             norm = functools.partial(nn.BatchNorm, use_running_average=not train, momentum=self.batch_norm_decay)
+        elif self.include_ln:
+            norm = nn.LayerNorm
         else:
             norm = None
 
