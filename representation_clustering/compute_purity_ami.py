@@ -14,6 +14,7 @@ import numpy as np
 from scipy.stats import mode
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import adjusted_mutual_info_score
+from sklearn.preprocessing import normalize
 import pickle
 import fs as pyfs
 
@@ -134,13 +135,15 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
 
 
 def evaluate_purity_across_layers():
-  dataset_type = "entity13"
-  shuffle_subclasses = True
-  model_dir = f"gs://representation_clustering/{dataset_type}_4_subclasses_shuffle_vgg16/"
+  dataset_type = "living17"
+  shuffle_subclasses = False
+  model_dir = f"gs://representation_clustering/{dataset_type}_4_subclasses_vgg16/"
+  model_dir = f"gs://gresearch/representation-interpretability/breeds/{dataset_type}_400_epochs_ema_0.99_bn_0.99/"
+  ckpt_number = 173
   if "shuffle" in model_dir:
     assert(shuffle_subclasses == True)
   
-  eval_ds, num_classes, train_subclasses = load_eval_ds(dataset_type, -1, 4, shuffle_subclasses)
+  eval_ds, num_classes, train_subclasses = load_eval_ds(dataset_type, -1, -1, shuffle_subclasses)
   config = get_config()
   learning_rate_fn = functools.partial(
       get_learning_rate,
@@ -148,7 +151,7 @@ def evaluate_purity_across_layers():
       steps_per_epoch=40,
       num_epochs=config.num_epochs,
       warmup_epochs=config.warmup_epochs)
-  checkpoint_path = os.path.join(model_dir, 'checkpoints-0/ckpt-81.flax')
+  checkpoint_path = os.path.join(model_dir, f'checkpoints-0/ckpt-{ckpt_number}.flax')
   model, state = create_train_state(config, jax.random.PRNGKey(0), input_shape=(8, 224, 224, 3), num_classes=num_classes, learning_rate_fn=learning_rate_fn)
   state = checkpoints.restore_checkpoint(checkpoint_path, state)
   print("step:", state.step)
@@ -183,6 +186,8 @@ def evaluate_purity_across_layers():
     for key, all_intermediates in all_layer_intermediates.items():
       n_subclasses = len(train_subclasses[0])
       all_intermediates = np.vstack(all_intermediates)
+      if normalize_embeddings:
+        all_intermediates = normalize(all_intermediates, axis=1, copy=False)
       print(key, all_intermediates.shape)
       purity_result_dict, ami_result_dict = {}, {}
       clf_labels_dict = {}
@@ -219,7 +224,11 @@ def evaluate_purity_across_layers():
 
       print(purity_result_dict)
       print(ami_result_dict)
-      gcloud_fs = pyfs.open_fs(model_dir)
+      if "gs://gresearch" in model_dir:
+        save_model_dir = model_dir.replace("gs://gresearch/representation-interpretability/breeds", "gs://representation_clustering/previous_models")
+      else:
+        save_model_dir = model_dir
+      gcloud_fs = pyfs.open_fs(save_model_dir)
       if normalize_embeddings:
         with gcloud_fs.open(f'class_purity_ckpt_{key}_normalized.pkl', 'wb') as f:
           pickle.dump(purity_result_dict, f)

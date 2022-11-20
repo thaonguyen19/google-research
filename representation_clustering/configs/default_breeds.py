@@ -23,15 +23,15 @@ def get_config():
   config = ml_collections.ConfigDict()
 
   config.dataset_name = "breeds"
-  config.dataset_type = "entity13"
-  config.shuffle_subclasses = True
+  config.dataset_type = "living17"
+  config.shuffle_subclasses = False
   config.num_classes = -1
-  config.num_subclasses = 4
+  config.num_subclasses = -1
   config.loss_fn = "cross_entropy"
   config.fine_grained_labels = False
   # This is the learning rate for batch size 256. The code scales it linearly
   # with the batch size. This is common for ImageNet and SGD.
-  config.model_name = "vgg16"
+  config.model_name = "resnet50"
   if config.model_name == "vgg16":
     config.learning_rate = 0.01
     config.include_bn = False
