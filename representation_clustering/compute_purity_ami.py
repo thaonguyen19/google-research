@@ -125,7 +125,7 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
       read_config=read_config,
       decoders=None)
 
-  batch_size = 16
+  batch_size = 8
   eval_ds = eval_ds.filter(functools.partial(predicate, all_subclasses=all_subclasses))
   eval_ds = eval_ds.cache()
   eval_ds = eval_ds.map(eval_preprocess, num_parallel_calls=tf.data.experimental.AUTOTUNE)
@@ -158,7 +158,11 @@ def evaluate_purity_across_layers():
 
   normalize_embeddings = True
   print(f"-------------------------- EVALUATING, normalize_embeddings={normalize_embeddings}")
-  for stage_prefix in ['conv1_1', 'conv1_2', 'conv2_1', 'conv2_2', 'conv3', 'conv4', 'conv5', 'fc']:
+  layer_names = ['stage1_block1', 'stage1_block2', 'stage1_block3', 'stage2_block1', 'stage2_block2', 'stage2_block3', 'stage2_block4',
+                   'stage3_block1', 'stage3_block2', 'stage3_block3', 'stage3_block4', 'stage3_block5', 'stage3_block6', 
+                   'stage4_block1', 'stage4_block2', 'stage4_block3']
+  layer_names = ['stage1', 'stage2', 'stage3', 'stage4']
+  for stage_prefix in layer_names:
     all_layer_intermediates = {}
     all_subclass_labels = []
     for step, batch in enumerate(eval_ds):
@@ -173,10 +177,20 @@ def evaluate_purity_across_layers():
       for layer in sorted(intermediates.keys()):
         if not layer.startswith(stage_prefix):
           continue
-        key = layer
-        if key not in all_layer_intermediates:
-          all_layer_intermediates[key] = []
-        all_layer_intermediates[key].append(np.array(intermediates[key]['__call__'][0]).reshape(bs, -1))
+        if 'vgg' in model_dir:
+          key = layer
+          if key not in all_layer_intermediates:
+            all_layer_intermediates[key] = []
+          all_layer_intermediates[key].append(np.array(intermediates[key]['__call__'][0]).reshape(bs, -1))
+        else:
+          for block in sorted(intermediates[layer].keys()):
+            if not block.startswith('block'):
+              continue
+            key = '_'.join([layer, block])
+            if key not in all_layer_intermediates:
+              all_layer_intermediates[key] = []
+            print(intermediates[layer][block]['__call__'][0].shape)
+            all_layer_intermediates[key].append(intermediates[layer][block]['__call__'][0].reshape(bs, -1)) 
     for k, v in all_layer_intermediates.items():
       print(k, v[0].shape)
 
