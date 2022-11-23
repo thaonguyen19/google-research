@@ -23,7 +23,7 @@ def get_config():
   config = ml_collections.ConfigDict()
 
   config.dataset_name = "breeds"
-  config.dataset_type = "living17"
+  config.dataset_type = "entity13"
   config.shuffle_subclasses = False
   config.num_classes = -1
   config.num_subclasses = -1

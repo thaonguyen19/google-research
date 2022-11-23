@@ -135,15 +135,16 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
 
 
 def evaluate_purity_across_layers():
-  dataset_type = "living17"
-  shuffle_subclasses = False
+  dataset_type = "entity13_4_subclasses_shuffle"
+  shuffle_subclasses = True
   model_dir = f"gs://representation_clustering/{dataset_type}_4_subclasses_vgg16/"
   model_dir = f"gs://gresearch/representation-interpretability/breeds/{dataset_type}_400_epochs_ema_0.99_bn_0.99/"
-  ckpt_number = 173
+  ckpt_number = 129
   if "shuffle" in model_dir:
     assert(shuffle_subclasses == True)
-  
-  eval_ds, num_classes, train_subclasses = load_eval_ds(dataset_type, -1, -1, shuffle_subclasses)
+
+  dataset_type = dataset_type.split('_')[0] 
+  eval_ds, num_classes, train_subclasses = load_eval_ds(dataset_type, -1, 4, shuffle_subclasses)
   config = get_config()
   learning_rate_fn = functools.partial(
       get_learning_rate,
@@ -177,7 +178,7 @@ def evaluate_purity_across_layers():
       for layer in sorted(intermediates.keys()):
         if not layer.startswith(stage_prefix):
           continue
-        if 'vgg' in model_dir:
+        if 'vgg' in model_dir or layer == 'head':
           key = layer
           if key not in all_layer_intermediates:
             all_layer_intermediates[key] = []
@@ -189,8 +190,7 @@ def evaluate_purity_across_layers():
             key = '_'.join([layer, block])
             if key not in all_layer_intermediates:
               all_layer_intermediates[key] = []
-            print(intermediates[layer][block]['__call__'][0].shape)
-            all_layer_intermediates[key].append(intermediates[layer][block]['__call__'][0].reshape(bs, -1)) 
+            all_layer_intermediates[key].append(np.array(intermediates[layer][block]['__call__'][0]).reshape(bs, -1)) 
     for k, v in all_layer_intermediates.items():
       print(k, v[0].shape)
 
