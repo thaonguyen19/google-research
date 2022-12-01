@@ -135,11 +135,11 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
 
 
 def evaluate_purity_across_layers():
-  dataset_type = "entity13_4_subclasses_shuffle"
-  shuffle_subclasses = True
-  model_dir = f"gs://representation_clustering/{dataset_type}_4_subclasses_vgg16/"
-  model_dir = f"gs://gresearch/representation-interpretability/breeds/{dataset_type}_400_epochs_ema_0.99_bn_0.99/"
-  ckpt_number = 129
+  dataset_type = "entity13_4_subclasses"
+  shuffle_subclasses = False
+  model_dir = f"gs://representation_clustering/{dataset_type}_vgg16_with_bn_high_lr/"
+  #model_dir = f"gs://gresearch/representation-interpretability/breeds/{dataset_type}_400_epochs_ema_0.99_bn_0.99/"
+  ckpt_number = 81
   if "shuffle" in model_dir:
     assert(shuffle_subclasses == True)
 
@@ -159,10 +159,11 @@ def evaluate_purity_across_layers():
 
   normalize_embeddings = True
   print(f"-------------------------- EVALUATING, normalize_embeddings={normalize_embeddings}")
-  layer_names = ['stage1_block1', 'stage1_block2', 'stage1_block3', 'stage2_block1', 'stage2_block2', 'stage2_block3', 'stage2_block4',
-                   'stage3_block1', 'stage3_block2', 'stage3_block3', 'stage3_block4', 'stage3_block5', 'stage3_block6', 
-                   'stage4_block1', 'stage4_block2', 'stage4_block3']
-  layer_names = ['stage1', 'stage2', 'stage3', 'stage4']
+  if 'vgg' in model_dir:
+    layer_names = ['conv1_1', 'conv1_2', 'conv2_1', 'conv2_2', 'conv3_1', 'conv3_2', 'conv3_3', 
+                        'conv4_1', 'conv4_2', 'conv4_3', 'conv5_1', 'conv5_2', 'conv5_3', 'fc6', 'fc7', 'fc8']
+  else:
+    layer_names = ['stage1', 'stage2', 'stage3', 'stage4']
   for stage_prefix in layer_names:
     all_layer_intermediates = {}
     all_subclass_labels = []

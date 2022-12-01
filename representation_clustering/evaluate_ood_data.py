@@ -18,6 +18,7 @@ from sklearn.decomposition import PCA
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import adjusted_mutual_info_score
 from sklearn.mixture import GaussianMixture
+from sklearn.preprocessing import normalize
 
 from clu import preprocess_spec
 from scipy.special import comb
@@ -79,7 +80,7 @@ def compute_purity(clusters, classes):
   return purity
 
 
-def evaluate_purity(eval_dataset, model_dir, ckpt_number, n_classes, overcluster_factors, n_subclasses, ood_dataset):
+def evaluate_purity(eval_dataset, model_dir, ckpt_number, n_classes, overcluster_factors, n_subclasses, ood_dataset, normalize_embeddings):
   """Given a model and a dataset, cluster the second-to-last layer representations and compute average purity."""
   config = get_config()
   learning_rate_fn = functools.partial(
@@ -109,6 +110,8 @@ def evaluate_purity(eval_dataset, model_dir, ckpt_number, n_classes, overcluster
     all_intermediates.append(np.mean(intermediates['stage4']['__call__'][0], axis=(1,2)).reshape(bs, -1))
 
   all_intermediates = np.vstack(all_intermediates)
+  if normalize_embeddings:
+    all_intermediates = normalize(all_intermediates, axis=1, copy=False)
   all_subclass_labels = np.hstack(all_subclass_labels)
   all_images = np.vstack(all_images)
 
@@ -122,7 +125,10 @@ def evaluate_purity(eval_dataset, model_dir, ckpt_number, n_classes, overcluster
   if "gs://gresearch" in model_dir:
     model_dir = model_dir.replace("gs://gresearch/representation-interpretability/breeds", "gs://representation_clustering/previous_models")
   gcloud_fs = pyfs.open_fs(model_dir)
-  with gcloud_fs.open(f"{ood_dataset}_purity.pkl", 'wb') as f:
+  out_file = f'{ood_dataset}_purity.pkl'
+  if normalize_embeddings:
+    out_file = out_file.replace('.pkl', '_normalized.pkl')
+  with gcloud_fs.open(out_file, 'wb') as f:
     pickle.dump(result_dict, f)
   return result_dict, all_clf_labels
 
@@ -174,8 +180,9 @@ if __name__ == "__main__":
   #                ]
 
   overcluster_factors = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  normalize_embeddings = True
 
   for model_dir, ckpt_number, N_CLASSES in model_metadata:
     print(model_dir)
-    result_dict, _ = evaluate_purity(eval_ds, model_dir, ckpt_number, N_CLASSES, overcluster_factors, n_subclasses, DATASET)
+    result_dict, _ = evaluate_purity(eval_ds, model_dir, ckpt_number, N_CLASSES, overcluster_factors, n_subclasses, DATASET, normalize_embeddings)
     print(result_dict)
