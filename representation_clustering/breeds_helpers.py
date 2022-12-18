@@ -7,6 +7,7 @@ from collections import OrderedDict, Counter
 import operator
 import networkx as nx
 import pickle
+import itertools
 #from ..datasets import DATASETS
 
 REQUIRED_FILES = ['dataset_class_info.json',
@@ -346,7 +347,7 @@ class BreedsDatasetGenerator():
 
     def get_superclasses(self, level, Nsubclasses=None,
                          split=None, ancestor=None, balanced=True, 
-                         random_seed=2, verbose=False):
+                         random_seed=2, verbose=False, num_classes=-1,num_subclasses=-1):
         """
         Obtain a dataset composed of ImageNet superclasses with a desired
         set of properties. 
@@ -404,6 +405,8 @@ class BreedsDatasetGenerator():
         # Find superclasses that have sufficient subclasses
         superclass_idx = [i for i in range(len(rel_nodes)) 
                           if len(in_desc[i]) >= Nsubclasses]
+        if num_classes > 0:
+            superclass_idx = list(rng.choice(superclass_idx, num_classes, replace=False))
         superclasses, all_subclasses = [rel_nodes[i] for i in superclass_idx], \
                                         [in_desc[i] for i in superclass_idx]
 
@@ -415,7 +418,10 @@ class BreedsDatasetGenerator():
         if split is None:
 
             if balanced:
-                Ns = [Nsubclasses] * len(all_subclasses)
+                if num_subclasses > 0:
+                    Ns = [num_subclasses] * len(all_subclasses)
+                else:
+                    Ns = [Nsubclasses] * len(all_subclasses)
             else:
                 Ns = [len(d) for d in all_subclasses]
             wnids = [list(rng.choice(d, n, replace=False))
@@ -483,20 +489,80 @@ def print_dataset_info(superclasses,
 
 # Some standard datasets from the BREEDS paper.
 def make_breeds_dataset(dataset_type, info_dir, info_dir2, num_classes, num_subclasses, shuffle_subclasses, split=None):
-    if num_subclasses > 0:
-        pkl_file = f'/home/thao/make_{dataset_type}_{num_subclasses}_subclasses.pkl'
-        if shuffle_subclasses:
-            pkl_file = pkl_file.replace('.pkl', '_shuffle.pkl')
-        print(f"######################## LOADING {pkl_file}")
-        with open(pkl_file, 'rb') as f:
-            return pickle.load(f)
-    elif num_classes > 0:
-        pkl_file = f'/home/thao/make_{dataset_type}_{num_classes}_classes.pkl'
-        if shuffle_subclasses:
-            pkl_file = pkl_file.replace('.pkl', '_shuffle.pkl')
-        print(f"######################## LOADING {pkl_file}")
-        with open(pkl_file, 'rb') as f:
-            return pickle.load(f)
+    if num_subclasses > 0 or num_classes > 0:
+        if num_subclasses > 0:
+            pkl_file = f'/home/thao/make_{dataset_type}_{num_subclasses}_subclasses.pkl'
+            if shuffle_subclasses:
+                pkl_file = pkl_file.replace('.pkl', '_shuffle.pkl')
+            print(f"######################## LOADING {pkl_file}")
+        elif num_classes > 0:
+            pkl_file = f'/home/thao/make_{dataset_type}_{num_classes}_classes.pkl'
+            if shuffle_subclasses:
+                pkl_file = pkl_file.replace('.pkl', '_shuffle.pkl')
+            print(f"######################## LOADING {pkl_file}")
+        if os.path.exists(pkl_file):
+            with open(pkl_file, 'rb') as f:
+                return pickle.load(f)
+        else:
+            print(f"######################## CREATING {pkl_file}")
+            DG = BreedsDatasetGenerator(info_dir)
+            if dataset_name == "entity13":
+                ret = DG.get_superclasses(level=3, 
+                       ancestor=None,
+                       Nsubclasses=20, 
+                       split=split, 
+                       balanced=True, 
+                       random_seed=2,
+                       verbose=False,
+                       num_classes=num_classes,
+                       num_subclasses=num_subclasses) 
+            elif dataset_name == "entity30":
+                ret = DG.get_superclasses(level=4, 
+                       ancestor=None,
+                       Nsubclasses=8, 
+                       split=split, 
+                       balanced=True, 
+                       random_seed=2,
+                       verbose=False,
+                       num_classes=num_classes,
+                       num_subclasses=num_subclasses)
+            elif dataset_name == "living17":
+                ret = DG.get_superclasses(level=5, 
+                       ancestor="n00004258",
+                       Nsubclasses=4, 
+                       split=split, 
+                       balanced=True, 
+                       random_seed=2,
+                       verbose=False,
+                       num_classes=num_classes,
+                       num_subclasses=num_subclasses)
+            elif dataset_name == "nonliving26":
+                ret = DG.get_superclasses(level=5, 
+                       ancestor="n00021939",
+                       Nsubclasses=4, 
+                       split=split, 
+                       balanced=True, 
+                       random_seed=2,
+                       verbose=False,
+                       num_classes=num_classes,
+                       num_subclasses=num_subclasses)
+            else:
+                print(f"{dataset_name} is not supported")
+            if shuffle_subclasses:
+                rng = np.random.RandomState(2)
+                superclasses, subclass_split, label_map = ret
+                train_subclasses = subclass_split[0]
+                all_subclasses = list(itertools.chain(**train_subclasses))
+                rng.shuffle(all_subclasses)
+                n_subclass_per_class = len(train_subclasses[0])
+                new_train_subclasses = []
+                for i in range(0, len(all_subclasses), n_subclass_per_class):
+                    new_train_subclasses.append(all_subclasses[i:(i + n_subclass_per_class)])
+                ret = superclasses, (new_train_subclasses, subclass_split[1]), label_map
+            with open(pkl_file, 'wb') as f:
+                pickle.dump(ret, f)
+            return ret
+
     else:
         if dataset_type == 'entity13': 
             return make_entity13(info_dir, split)
