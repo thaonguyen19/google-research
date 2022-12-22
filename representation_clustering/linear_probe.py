@@ -14,8 +14,6 @@ from compute_purity_ami import load_eval_ds, get_learning_rate
 from train import create_train_state
 from configs.default_breeds import get_config
 from flax.training import checkpoints
-#sys.path.append('/home/thao/google_research/')
-#from google_research.linear_eval import linear_eval
 import linear_eval
 
 BREEDS_INFO_DIR = os.path.join(
@@ -116,13 +114,6 @@ def embed_images(model, state, images, layer_name):
   }
   _, state = model.apply(variables, images, capture_intermediates=True, mutable=["intermediates"], train=False)
   out = state['intermediates'][layer_name]['__call__'][0]
-
-  #out = model.apply(
-  #    dict(params=params),
-  #    images,
-  #    train=False,
-  #    capture_intermediates=True,
-  #    mutable=["intermediates"])[1]['intermediates']['Transformer']['encoderblock_11']['LayerNorm_1']['__call__'][0]
   return jnp.reshape(out, (out.shape[0], -1))
 
 
@@ -169,18 +160,6 @@ if __name__ == '__main__':
                         'conv4_1', 'conv4_2', 'conv4_3', 'conv5_1', 'conv5_2', 'conv5_3', 'fc6', 'fc7', 'fc8']
   else:
     layer_names = ['stage1', 'stage2', 'stage3', 'stage4']
-
-  # Build model and load params.
-  #model_name = 'ViT-S_32'
-  #checkpoint_path = 'gs://vit_models/augreg/S_32-i21k-300ep-lr_0.001-aug_none-wd_0.1-do_0.0-sd_0.0.npz'
-  #model_config = dict(models_config.MODEL_CONFIGS[model_name])
-  #model_config['num_classes'] = 21843  # ImageNet-21K
-  #params = checkpoint.load(checkpoint_path)
-  #params_repl = flax.jax_utils.replicate(params)
-
-  # Replace these functions with code tailored for the specific model.
-  #IMAGE_SIZE = 224
-  #BATCH_SIZE = 1024
 
   embeddings = {}
   labels = {}
