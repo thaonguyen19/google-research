@@ -74,7 +74,7 @@ def get_learning_rate(step: int,
   return lr * warmup
 
 
-def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, lookup_labels=False):
+def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, split=tfds.Split.VALIDATION, lookup_labels=False, use_fine_grained_labels=False):
   ret = breeds_helpers.make_breeds_dataset(
       dataset_type,
       BREEDS_INFO_DIR,
@@ -90,6 +90,12 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
   new_label_map = {}
   for super_idx, sub in enumerate(train_subclasses):
     new_label_map.update({s: super_idx for s in sub})
+
+  if use_fine_grained_labels:
+    num_classes = len(all_subclasses)
+    for super_idx, sub in enumerate(all_subclasses):
+      new_label_map.update({sub : super_idx})
+
   print(new_label_map)
   lookup_table = tf.lookup.StaticHashTable(
       initializer=tf.lookup.KeyValueTensorInitializer(
@@ -120,7 +126,7 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
 
   read_config = tfds.ReadConfig(shuffle_seed=None, options=dataset_options)
   eval_ds = dataset_builder.as_dataset(
-      split=tfds.Split.VALIDATION,
+      split=split,
       shuffle_files=False,
       read_config=read_config,
       decoders=None)
@@ -197,6 +203,7 @@ def evaluate_purity_across_layers():
 
     all_subclass_labels = np.hstack(all_subclass_labels)
     print(all_subclass_labels.shape)
+    
 
     for key, all_intermediates in all_layer_intermediates.items():
       n_subclasses = len(train_subclasses[0])

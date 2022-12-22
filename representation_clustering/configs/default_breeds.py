@@ -31,7 +31,7 @@ def get_config():
   config.fine_grained_labels = False
   # This is the learning rate for batch size 256. The code scales it linearly
   # with the batch size. This is common for ImageNet and SGD.
-  config.model_name = "resnet50"
+  config.model_name = "vgg16"
   if config.model_name == "vgg16":
     config.learning_rate = 0.01
     config.include_bn = False
