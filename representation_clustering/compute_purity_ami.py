@@ -172,7 +172,7 @@ def evaluate_purity_across_layers(ckpt_number):
     layer_names = ['stage1_block1', 'stage1_block2', 'stage1_block3', 'stage2_block1', 'stage2_block2', \
                    'stage2_block3', 'stage2_block4', 'stage3_block1', 'stage3_block2', 'stage3_block3', \
                    'stage3_block4', 'stage3_block5', 'stage3_block6', 'stage4_block1', 'stage4_block2', 'stage4_block3']
-  for stage_prefix in layer_names:
+  for layer in layer_names:
     all_layer_intermediates = {}
     all_subclass_labels = []
     for step, batch in enumerate(eval_ds):
@@ -184,20 +184,16 @@ def evaluate_purity_across_layers(ckpt_number):
       all_subclass_labels.append(labels)
     
       count = 0
-      for layer in sorted(intermediates.keys()):
-        if not layer.startswith(stage_prefix):
-          continue
-        if 'vgg' in model_dir or layer == 'head':
-          key = layer
-          if key not in all_layer_intermediates:
-            all_layer_intermediates[key] = []
-          all_layer_intermediates[key].append(np.array(intermediates[key]['__call__'][0]).reshape(bs, -1))
-        else:
-          stage, block = layer.split('_')
-          key = layer
-          if key not in all_layer_intermediates:
-            all_layer_intermediates[key] = []
-          all_layer_intermediates[key].append(np.array(intermediates[stage][block]['__call__'][0]).reshape(bs, -1)) 
+      key = layer
+      if 'vgg' in model_dir or layer == 'head':
+        if key not in all_layer_intermediates:
+          all_layer_intermediates[key] = []
+        all_layer_intermediates[key].append(np.array(intermediates[key]['__call__'][0]).reshape(bs, -1))
+      else:
+        stage, block = layer.split('_')
+        if key not in all_layer_intermediates:
+          all_layer_intermediates[key] = []
+        all_layer_intermediates[key].append(np.array(intermediates[stage][block]['__call__'][0]).reshape(bs, -1)) 
     for k, v in all_layer_intermediates.items():
       print(k, v[0].shape)
 
