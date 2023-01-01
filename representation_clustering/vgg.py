@@ -58,6 +58,7 @@ class VGG(nn.Module):
     batch_norm_decay: float = 0.9
 
     def setup(self):
+        #print("INCLUDE BN:", self.include_bn)
         self.param_dict = None
 
     @nn.compact

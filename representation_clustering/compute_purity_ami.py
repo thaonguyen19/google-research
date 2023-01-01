@@ -74,7 +74,7 @@ def get_learning_rate(step: int,
   return lr * warmup
 
 
-def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, lookup_labels=False):
+def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, split=tfds.Split.VALIDATION, lookup_labels=False, use_fine_grained_labels=False):
   ret = breeds_helpers.make_breeds_dataset(
       dataset_type,
       BREEDS_INFO_DIR,
@@ -90,6 +90,12 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
   new_label_map = {}
   for super_idx, sub in enumerate(train_subclasses):
     new_label_map.update({s: super_idx for s in sub})
+
+  if use_fine_grained_labels:
+    num_classes = len(all_subclasses)
+    for super_idx, sub in enumerate(all_subclasses):
+      new_label_map.update({sub : super_idx})
+
   print(new_label_map)
   lookup_table = tf.lookup.StaticHashTable(
       initializer=tf.lookup.KeyValueTensorInitializer(
@@ -120,7 +126,7 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
 
   read_config = tfds.ReadConfig(shuffle_seed=None, options=dataset_options)
   eval_ds = dataset_builder.as_dataset(
-      split=tfds.Split.VALIDATION,
+      split=split,
       shuffle_files=False,
       read_config=read_config,
       decoders=None)
@@ -134,17 +140,18 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
   return eval_ds, num_classes, train_subclasses
 
 
-def evaluate_purity_across_layers():
-  dataset_type = "entity13_4_subclasses"
+def evaluate_purity_across_layers(ckpt_number):
+  dataset_type = "living17"
   shuffle_subclasses = False
-  model_dir = f"gs://representation_clustering/{dataset_type}_vgg16_with_bn_high_lr/"
+  model_dir = f"gs://representation_clustering/{dataset_type}_resnet50_seed_2/"
+  num_subclasses = -1
   #model_dir = f"gs://gresearch/representation-interpretability/breeds/{dataset_type}_400_epochs_ema_0.99_bn_0.99/"
-  ckpt_number = 81
+  #ckpt_number = 81
   if "shuffle" in model_dir:
     assert(shuffle_subclasses == True)
 
   dataset_type = dataset_type.split('_')[0] 
-  eval_ds, num_classes, train_subclasses = load_eval_ds(dataset_type, -1, 4, shuffle_subclasses)
+  eval_ds, num_classes, train_subclasses = load_eval_ds(dataset_type, -1, num_subclasses, shuffle_subclasses)
   config = get_config()
   learning_rate_fn = functools.partial(
       get_learning_rate,
@@ -163,8 +170,11 @@ def evaluate_purity_across_layers():
     layer_names = ['conv1_1', 'conv1_2', 'conv2_1', 'conv2_2', 'conv3_1', 'conv3_2', 'conv3_3', 
                         'conv4_1', 'conv4_2', 'conv4_3', 'conv5_1', 'conv5_2', 'conv5_3', 'fc6', 'fc7', 'fc8']
   else:
-    layer_names = ['stage1', 'stage2', 'stage3', 'stage4']
-  for stage_prefix in layer_names:
+    layer_names = ['stage1_block1', 'stage1_block2', 'stage1_block3', 'stage2_block1', 'stage2_block2', \
+                   'stage2_block3', 'stage2_block4', 'stage3_block1', 'stage3_block2', 'stage3_block3', \
+                   'stage3_block4', 'stage3_block5', 'stage3_block6', 'stage4_block1', 'stage4_block2', 'stage4_block3']
+  for layer in layer_names:
+    print('########################', layer)
     all_layer_intermediates = {}
     all_subclass_labels = []
     for step, batch in enumerate(eval_ds):
@@ -176,27 +186,22 @@ def evaluate_purity_across_layers():
       all_subclass_labels.append(labels)
     
       count = 0
-      for layer in sorted(intermediates.keys()):
-        if not layer.startswith(stage_prefix):
-          continue
-        if 'vgg' in model_dir or layer == 'head':
-          key = layer
-          if key not in all_layer_intermediates:
-            all_layer_intermediates[key] = []
-          all_layer_intermediates[key].append(np.array(intermediates[key]['__call__'][0]).reshape(bs, -1))
-        else:
-          for block in sorted(intermediates[layer].keys()):
-            if not block.startswith('block'):
-              continue
-            key = '_'.join([layer, block])
-            if key not in all_layer_intermediates:
-              all_layer_intermediates[key] = []
-            all_layer_intermediates[key].append(np.array(intermediates[layer][block]['__call__'][0]).reshape(bs, -1)) 
+      key = layer
+      if 'vgg' in model_dir or layer == 'head':
+        if key not in all_layer_intermediates:
+          all_layer_intermediates[key] = []
+        all_layer_intermediates[key].append(np.array(intermediates[key]['__call__'][0]).reshape(bs, -1))
+      else:
+        stage, block = layer.split('_')
+        if key not in all_layer_intermediates:
+          all_layer_intermediates[key] = []
+        all_layer_intermediates[key].append(np.array(intermediates[stage][block]['__call__'][0]).reshape(bs, -1)) 
     for k, v in all_layer_intermediates.items():
       print(k, v[0].shape)
 
     all_subclass_labels = np.hstack(all_subclass_labels)
     print(all_subclass_labels.shape)
+    
 
     for key, all_intermediates in all_layer_intermediates.items():
       n_subclasses = len(train_subclasses[0])
@@ -244,20 +249,27 @@ def evaluate_purity_across_layers():
       else:
         save_model_dir = model_dir
       gcloud_fs = pyfs.open_fs(save_model_dir)
+      
+      class_purity_file = f'class_purity_ckpt_{key}.pkl'
+      clf_labels_file = f'clf_labels_ckpt_{key}.pkl'
+      ami_file = f'adjusted_mutual_info_ckpt_{key}.pkl'
       if normalize_embeddings:
-        with gcloud_fs.open(f'class_purity_ckpt_{key}_normalized.pkl', 'wb') as f:
-          pickle.dump(purity_result_dict, f)
-        with gcloud_fs.open(f'clf_labels_ckpt_{key}_normalized.pkl', 'wb') as f:
-          pickle.dump(clf_labels_dict, f)  
-        with gcloud_fs.open(f'adjusted_mutual_info_ckpt_{key}_normalized.pkl', 'wb') as f:
-          pickle.dump(ami_result_dict, f)
-      else:
-        with gcloud_fs.open(f'class_purity_ckpt_{key}.pkl', 'wb') as f:
-          pickle.dump(purity_result_dict, f)
-        with gcloud_fs.open(f'clf_labels_ckpt_{key}.pkl', 'wb') as f:
-          pickle.dump(clf_labels_dict, f) 
-        with gcloud_fs.open(f'adjusted_mutual_info_ckpt_{key}.pkl', 'wb') as f:
-          pickle.dump(ami_result_dict, f)
+        class_purity_file = class_purity_file.replace('.pkl', '_normalized.pkl')
+        clf_labels_file = clf_labels_file.replace('.pkl', '_normalized.pkl')
+        ami_file = ami_file.replace('.pkl', '_normalized.pkl')
+      if ckpt_number != 81:
+        class_purity_file = class_purity_file.replace('.pkl', f'_ckpt_{ckpt_number}.pkl')
+        clf_labels_file = clf_labels_file.replace('.pkl', f'_ckpt_{ckpt_number}.pkl')
+        ami_file = ami_file.replace('.pkl', f'_ckpt_{ckpt_number}.pkl')
+      print(class_purity_file, clf_labels_file, ami_file)
+      with gcloud_fs.open(class_purity_file, 'wb') as f:
+        pickle.dump(purity_result_dict, f)
+      with gcloud_fs.open(clf_labels_file, 'wb') as f:
+        pickle.dump(clf_labels_dict, f)  
+      with gcloud_fs.open(ami_file, 'wb') as f:
+        pickle.dump(ami_result_dict, f)
+
 
 if __name__ == "__main__":
-  evaluate_purity_across_layers()
+  for ckpt_number in [81]:#[1,21,41,61]:
+    evaluate_purity_across_layers(ckpt_number)
