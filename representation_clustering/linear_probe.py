@@ -113,8 +113,12 @@ def embed_images(model, state, images, layer_name):
       "batch_stats": state.batch_stats
   }
   _, state = model.apply(variables, images, capture_intermediates=True, mutable=["intermediates"], train=False)
-  out = state['intermediates'][layer_name]['__call__'][0]
-  return jnp.reshape(out, (out.shape[0], -1))
+  if 'stage' in layer_name:
+    stage, block = layer_name.split('_')
+    out = state['intermediates'][stage][block]['__call__'][0]
+  else:
+    out = state['intermediates'][layer_name]['__call__'][0]
+  return np.array(jnp.reshape(out, (out.shape[0], -1)))
 
 
 def embed_dataset(model, state, ds, layer_name):
@@ -159,7 +163,9 @@ if __name__ == '__main__':
     layer_names = ['conv1_1', 'conv1_2', 'conv2_1', 'conv2_2', 'conv3_1', 'conv3_2', 'conv3_3', 
                         'conv4_1', 'conv4_2', 'conv4_3', 'conv5_1', 'conv5_2', 'conv5_3', 'fc6', 'fc7', 'fc8']
   else:
-    layer_names = ['stage1', 'stage2', 'stage3', 'stage4']
+    layer_names = ['stage1_block1', 'stage1_block2', 'stage1_block3', 'stage2_block1', 'stage2_block2', \
+                   'stage2_block3', 'stage2_block4', 'stage3_block1', 'stage3_block2', 'stage3_block3', \
+                   'stage3_block4', 'stage3_block5', 'stage3_block6', 'stage4_block1', 'stage4_block2', 'stage4_block3']
 
   embeddings = {}
   labels = {}

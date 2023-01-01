@@ -141,16 +141,17 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
 
 
 def evaluate_purity_across_layers(ckpt_number):
-  dataset_type = "nonliving26"
+  dataset_type = "living17"
   shuffle_subclasses = False
-  model_dir = f"gs://representation_clustering/{dataset_type}_vgg16/"
+  model_dir = f"gs://representation_clustering/{dataset_type}_resnet50_seed_2/"
+  num_subclasses = -1
   #model_dir = f"gs://gresearch/representation-interpretability/breeds/{dataset_type}_400_epochs_ema_0.99_bn_0.99/"
   #ckpt_number = 81
   if "shuffle" in model_dir:
     assert(shuffle_subclasses == True)
 
   dataset_type = dataset_type.split('_')[0] 
-  eval_ds, num_classes, train_subclasses = load_eval_ds(dataset_type, -1, -1, shuffle_subclasses)
+  eval_ds, num_classes, train_subclasses = load_eval_ds(dataset_type, -1, num_subclasses, shuffle_subclasses)
   config = get_config()
   learning_rate_fn = functools.partial(
       get_learning_rate,
@@ -173,6 +174,7 @@ def evaluate_purity_across_layers(ckpt_number):
                    'stage2_block3', 'stage2_block4', 'stage3_block1', 'stage3_block2', 'stage3_block3', \
                    'stage3_block4', 'stage3_block5', 'stage3_block6', 'stage4_block1', 'stage4_block2', 'stage4_block3']
   for layer in layer_names:
+    print('########################', layer)
     all_layer_intermediates = {}
     all_subclass_labels = []
     for step, batch in enumerate(eval_ds):
@@ -247,21 +249,27 @@ def evaluate_purity_across_layers(ckpt_number):
       else:
         save_model_dir = model_dir
       gcloud_fs = pyfs.open_fs(save_model_dir)
+      
+      class_purity_file = f'class_purity_ckpt_{key}.pkl'
+      clf_labels_file = f'clf_labels_ckpt_{key}.pkl'
+      ami_file = f'adjusted_mutual_info_ckpt_{key}.pkl'
       if normalize_embeddings:
-        with gcloud_fs.open(f'class_purity_ckpt_{key}_normalized_ckpt_{ckpt_number}.pkl', 'wb') as f:
-          pickle.dump(purity_result_dict, f)
-        with gcloud_fs.open(f'clf_labels_ckpt_{key}_normalized_ckpt_{ckpt_number}.pkl', 'wb') as f:
-          pickle.dump(clf_labels_dict, f)  
-        with gcloud_fs.open(f'adjusted_mutual_info_ckpt_{key}_normalized_ckpt_{ckpt_number}.pkl', 'wb') as f:
-          pickle.dump(ami_result_dict, f)
-      else:
-        with gcloud_fs.open(f'class_purity_ckpt_{key}_ckpt_{ckpt_number}.pkl', 'wb') as f:
-          pickle.dump(purity_result_dict, f)
-        with gcloud_fs.open(f'clf_labels_ckpt_{key}_ckpt_{ckpt_number}.pkl', 'wb') as f:
-          pickle.dump(clf_labels_dict, f) 
-        with gcloud_fs.open(f'adjusted_mutual_info_ckpt_{key}_ckpt_{ckpt_number}.pkl', 'wb') as f:
-          pickle.dump(ami_result_dict, f)
+        class_purity_file = class_purity_file.replace('.pkl', '_normalized.pkl')
+        clf_labels_file = clf_labels_file.replace('.pkl', '_normalized.pkl')
+        ami_file = ami_file.replace('.pkl', '_normalized.pkl')
+      if ckpt_number != 81:
+        class_purity_file = class_purity_file.replace('.pkl', f'_ckpt_{ckpt_number}.pkl')
+        clf_labels_file = clf_labels_file.replace('.pkl', f'_ckpt_{ckpt_number}.pkl')
+        ami_file = ami_file.replace('.pkl', f'_ckpt_{ckpt_number}.pkl')
+      print(class_purity_file, clf_labels_file, ami_file)
+      with gcloud_fs.open(class_purity_file, 'wb') as f:
+        pickle.dump(purity_result_dict, f)
+      with gcloud_fs.open(clf_labels_file, 'wb') as f:
+        pickle.dump(clf_labels_dict, f)  
+      with gcloud_fs.open(ami_file, 'wb') as f:
+        pickle.dump(ami_result_dict, f)
+
 
 if __name__ == "__main__":
-  for ckpt_number in [1,21,41,61]:
+  for ckpt_number in [81]:#[1,21,41,61]:
     evaluate_purity_across_layers(ckpt_number)
