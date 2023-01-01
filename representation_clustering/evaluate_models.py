@@ -25,7 +25,8 @@ def predict(model, state, batch):
   logits = model.apply(variables, batch["image"], mutable=False, train=False)
   predictions = jnp.argmax(logits, axis=-1)
   acc = np.asarray(predictions == batch["label"]).mean()
-  return acc
+  #correct_preds = np.asarray(predictions == batch["label"])
+  return acc, np.asarray(predictions)
 
 
 def eval_model(model_dir, ckpt_number, dataset_type, num_classes, num_subclasses, shuffle_subclasses):
@@ -43,25 +44,34 @@ def eval_model(model_dir, ckpt_number, dataset_type, num_classes, num_subclasses
   state = checkpoints.restore_checkpoint(checkpoint_path, state)
   print("Load model ckpt with step:", state.step)
   all_accs, batch_sizes = [], []
+  all_preds = []
+  all_labels = []
 
   for step, batch in enumerate(eval_ds):
-    acc = predict(model, state, batch)
+    acc, preds = predict(model, state, batch)
     n_examples = batch['label'].numpy().shape[0]
+    all_labels.extend(list(batch['label'].numpy()))
     all_accs.append(acc)
+    all_preds.extend(list(preds))
     batch_sizes.append(n_examples)
   print(all_accs)
   acc = sum([a*b for a,b in zip(all_accs, batch_sizes)]) / sum(batch_sizes)
   print(f"Accuracy of the model: {acc*100}%")
-  return acc
+  return acc, all_preds, all_labels
 
 
 if __name__ == "__main__":
-  evaluate_all_epochs = True
-  dataset_types = ['living17', 'nonliving26', 'entity13', 'entity13_4_subclasses', 'entity13_4_subclasses_shuffle']
-  ckpt_numbers = [173, 257, 161, 129, 129]
+  evaluate_all_epochs = False
+  dataset_types = ['living17', 'nonliving26', 'entity13_4_subclasses', 'entity13_4_subclasses_shuffle'] #entity13
+  #ckpt_numbers = [173, 257, 161, 129, 129]
+  ckpt_numbers = [81]*5
   for i, dataset_type in enumerate(dataset_types):
+    #if 'nonliving' in dataset_type:
+    #  continue
+    print(f"################### {dataset_type} ###################")
     og_dataset_type = dataset_type
-    model_dir = f"gs://gresearch/representation-interpretability/breeds/{dataset_type}_400_epochs_ema_0.99_bn_0.99/"
+    #model_dir = f"gs://gresearch/representation-interpretability/breeds/{dataset_type}_400_epochs_ema_0.99_bn_0.99/"
+    model_dir = f"gs://representation_clustering/{dataset_type}_vgg16"
     num_classes = -1
     num_subclasses = -1
     shuffle_subclasses = False
@@ -73,18 +83,19 @@ if __name__ == "__main__":
     print(model_dir)
     ckpt_number = ckpt_numbers[i]
     if not evaluate_all_epochs:
-      eval_model(model_dir, ckpt_number, dataset_type, num_classes, num_subclasses, shuffle_subclasses)
-      print("")
+      acc, all_preds, all_labels = eval_model(model_dir, ckpt_number, dataset_type, num_classes, num_subclasses, shuffle_subclasses)
+      print(all_preds)
+      results = {'accuracy': acc, 'preds': all_preds, 'labels': all_labels}
       print("")
     else:
       results = {}
       for ckpt in range(int(ckpt_number/4), ckpt_number):
         print("CKPT:", ckpt)
-        acc = eval_model(model_dir, ckpt, dataset_type, num_classes, num_subclasses, shuffle_subclasses)
+        acc, _, _ = eval_model(model_dir, ckpt, dataset_type, num_classes, num_subclasses, shuffle_subclasses)
         results[ckpt] = acc
       print("ALL ACCURACIES:", results)
-      if "gs://gresearch" in model_dir:
-        model_dir = model_dir.replace("gs://gresearch/representation-interpretability/breeds", "gs://representation_clustering/previous_models")
-      gcloud_fs = pyfs.open_fs(model_dir)
-      with gcloud_fs.open("ckpt_val_acc.pkl", 'wb') as f:
-        pickle.dump(results, f)
+    if "gs://gresearch" in model_dir:
+      model_dir = model_dir.replace("gs://gresearch/representation-interpretability/breeds", "gs://representation_clustering/previous_models")
+    gcloud_fs = pyfs.open_fs(model_dir)
+    with gcloud_fs.open("ckpt_val_acc.pkl", 'wb') as f:
+      pickle.dump(results, f)
