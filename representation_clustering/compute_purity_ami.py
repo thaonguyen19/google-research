@@ -140,11 +140,11 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
   return eval_ds, num_classes, train_subclasses
 
 
-def evaluate_purity_across_layers(ckpt_number):
-  dataset_type = "living17"
-  shuffle_subclasses = False
-  model_dir = f"gs://representation_clustering/{dataset_type}_resnet50_seed_2/"
-  num_subclasses = -1
+def evaluate_purity_across_layers(ckpt_number, seed=1):
+  dataset_type = "entity13_4_subclasses_shuffle"
+  shuffle_subclasses = True
+  model_dir = f"gs://representation_clustering/{dataset_type}_vgg16_with_bn_seed_{seed}/"
+  num_subclasses = 4
   #model_dir = f"gs://gresearch/representation-interpretability/breeds/{dataset_type}_400_epochs_ema_0.99_bn_0.99/"
   #ckpt_number = 81
   if "shuffle" in model_dir:
@@ -272,4 +272,5 @@ def evaluate_purity_across_layers(ckpt_number):
 
 if __name__ == "__main__":
   for ckpt_number in [81]:#[1,21,41,61]:
-    evaluate_purity_across_layers(ckpt_number)
+    for seed in [1,2]:
+      evaluate_purity_across_layers(ckpt_number, seed=seed)

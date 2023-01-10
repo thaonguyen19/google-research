@@ -15,6 +15,7 @@ from train import create_train_state
 from configs.default_breeds import get_config
 from flax.training import checkpoints
 import linear_eval
+from sklearn.random_projection import SparseRandomProjection
 
 BREEDS_INFO_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "breeds")
@@ -118,18 +119,25 @@ def embed_images(model, state, images, layer_name):
     out = state['intermediates'][stage][block]['__call__'][0]
   else:
     out = state['intermediates'][layer_name]['__call__'][0]
-  return np.array(jnp.reshape(out, (out.shape[0], -1)))
+  out = np.array(jnp.reshape(out, (out.shape[0], -1)))
+  return out 
 
 
-def embed_dataset(model, state, ds, layer_name):
+def embed_dataset(model, state, ds, layer_name, is_train, transformer=None):
   all_embeddings = []
   all_labels = []
   for batch in ds:
     all_embeddings.append(embed_images(model, state, batch['image'], layer_name))
     all_labels.append(batch['label'])
   all_embeddings = np.concatenate(all_embeddings, 0)
+  print(all_embeddings.shape)
+  if transformer is None:
+    transformer = SparseRandomProjection(n_components=100000, random_state=42)
+    all_embeddings = transformer.fit_transform(all_embeddings)
+  else:
+    all_embeddings = transformer.transform(all_embeddings)
   all_labels = np.concatenate(all_labels, 0)
-  return all_embeddings, all_labels
+  return all_embeddings, all_labels, transformer
 
 
 if __name__ == '__main__':
@@ -170,16 +178,19 @@ if __name__ == '__main__':
   embeddings = {}
   labels = {}
   for layer_name in layer_names:
-    if 'fc' in layer_name or 'conv1' in layer_name:
+    if 'fc' not in layer_name: #'fc' in layer_name or 'conv1' in layer_name:
       continue
     print(f"################## LAYER = {layer_name}")
     for split_name, split in [('train', 'train[50000:]'),
                               ('val', 'train[:50000]'),
                               ('test', 'validation')]:
       ds, num_classes, _ = load_eval_ds(dataset_type, -1, num_subclasses, shuffle_subclasses, split=split, lookup_labels=True, use_fine_grained_labels=True)
-      num_examples = int(ds.reduce(0, lambda x, _: x + 1).numpy())
-      print(split_name, num_examples)
-      embeddings[split_name], labels[split_name] = embed_dataset(model, state, ds, layer_name)
+      #num_examples = int(ds.reduce(0, lambda x, _: x + 1).numpy())
+      #print(split_name, num_examples)
+      if split_name == 'train':
+        embeddings[split_name], labels[split_name], transformer = embed_dataset(model, state, ds, layer_name, is_train=True, transformer=None)
+      else:
+        embeddings[split_name], labels[split_name], _ = embed_dataset(model, state, ds, layer_name, is_train=False, transformer=transformer)
 
     out = efficient_tune_hparams_and_compute_test_accuracy(
       embeddings['train'], labels['train'],
@@ -190,6 +201,7 @@ if __name__ == '__main__':
       # datasets where metric is mean per-class accuracy.
       # eval_fn=linear_eval.evaluate_per_class
     )
+    print(out)
     if "gs://gresearch" in model_dir:
       save_model_dir = model_dir.replace("gs://gresearch/representation-interpretability/breeds", "gs://representation_clustering/previous_models")
     else:
