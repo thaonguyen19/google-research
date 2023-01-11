@@ -126,9 +126,17 @@ def embed_images(model, state, images, layer_name):
 def embed_dataset(model, state, ds, layer_name, is_train, transformer=None):
   all_embeddings = []
   all_labels = []
+  if transformer is None:
+    transformer = SparseRandomProjection(n_components=100000, random_state=42)
   for batch in ds:
-    all_embeddings.append(embed_images(model, state, batch['image'], layer_name))
+    embeddings = embed_images(model, state, batch['image'], layer_name)
+    try:
+      embeddings = transformer.transform(embeddings)
+    except:
+      embeddings = transformer.fit_transform(embeddings)
+    all_embeddings.append(embeddings)
     all_labels.append(batch['label'])
+
   all_embeddings = np.concatenate(all_embeddings, 0)
   print(all_embeddings.shape)
   if transformer is None:
@@ -207,5 +215,5 @@ if __name__ == '__main__':
     else:
       save_model_dir = model_dir
     gcloud_fs = pyfs.open_fs(save_model_dir)
-    with gcloud_fs.open(f'linear_transfer_{layer_name}.pkl', 'wb') as f:
+    with gcloud_fs.open(f'linear_transfer_{layer_name}2.pkl', 'wb') as f:
       pickle.dump(out, f)
