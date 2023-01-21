@@ -142,7 +142,7 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
 
 def evaluate_purity_across_layers(ckpt_number, seed=1):
   dataset_type = "living17"
-  model_dir = f"gs://representation_clustering/{dataset_type}_vgg16_with_bn/"
+  model_dir = f"gs://representation_clustering/{dataset_type}_fine_grained/"
   print(f"################## EVALUATING ckpt_number={ckpt_number}, seed={seed} #################")
 
   if '4_subclasses' in model_dir:
@@ -153,9 +153,13 @@ def evaluate_purity_across_layers(ckpt_number, seed=1):
     shuffle_subclasses = True
   else:
     shuffle_subclasses = False 
+  if 'fine_grained' in model_dir:
+    use_fine_grained_labels = True
+  else:
+    use_fine_grained_labels = False
 
   dataset_type = dataset_type.split('_')[0] 
-  eval_ds, num_classes, train_subclasses = load_eval_ds(dataset_type, -1, num_subclasses, shuffle_subclasses)
+  eval_ds, num_classes, train_subclasses = load_eval_ds(dataset_type, -1, num_subclasses, shuffle_subclasses, use_fine_grained_labels=use_fine_grained_labels)
   config = get_config()
   learning_rate_fn = functools.partial(
       get_learning_rate,
