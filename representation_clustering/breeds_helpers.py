@@ -506,7 +506,7 @@ def make_breeds_dataset(dataset_type, info_dir, info_dir2, num_classes, num_subc
         else:
             print(f"######################## CREATING {pkl_file}")
             DG = BreedsDatasetGenerator(info_dir)
-            if dataset_name == "entity13":
+            if dataset_type == "entity13":
                 ret = DG.get_superclasses(level=3, 
                        ancestor=None,
                        Nsubclasses=20, 
@@ -516,7 +516,7 @@ def make_breeds_dataset(dataset_type, info_dir, info_dir2, num_classes, num_subc
                        verbose=False,
                        num_classes=num_classes,
                        num_subclasses=num_subclasses) 
-            elif dataset_name == "entity30":
+            elif dataset_type == "entity30":
                 ret = DG.get_superclasses(level=4, 
                        ancestor=None,
                        Nsubclasses=8, 
@@ -526,7 +526,7 @@ def make_breeds_dataset(dataset_type, info_dir, info_dir2, num_classes, num_subc
                        verbose=False,
                        num_classes=num_classes,
                        num_subclasses=num_subclasses)
-            elif dataset_name == "living17":
+            elif dataset_type == "living17":
                 ret = DG.get_superclasses(level=5, 
                        ancestor="n00004258",
                        Nsubclasses=4, 
@@ -536,7 +536,7 @@ def make_breeds_dataset(dataset_type, info_dir, info_dir2, num_classes, num_subc
                        verbose=False,
                        num_classes=num_classes,
                        num_subclasses=num_subclasses)
-            elif dataset_name == "nonliving26":
+            elif dataset_type == "nonliving26":
                 ret = DG.get_superclasses(level=5, 
                        ancestor="n00021939",
                        Nsubclasses=4, 
@@ -552,7 +552,7 @@ def make_breeds_dataset(dataset_type, info_dir, info_dir2, num_classes, num_subc
                 rng = np.random.RandomState(2)
                 superclasses, subclass_split, label_map = ret
                 train_subclasses = subclass_split[0]
-                all_subclasses = list(itertools.chain(**train_subclasses))
+                all_subclasses = list(itertools.chain.from_iterable(train_subclasses))
                 rng.shuffle(all_subclasses)
                 n_subclass_per_class = len(train_subclasses[0])
                 new_train_subclasses = []
