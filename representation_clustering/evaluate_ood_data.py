@@ -60,7 +60,7 @@ def get_learning_rate(step: int,
 def predict(model, state, batch):
   """Get intermediate representations from a model."""
   variables = {
-      "params": state.ema_params,
+      "params": state.params if state.ema_params is None else state.ema_params,
       "batch_stats": state.batch_stats
   }
   _, state = model.apply(variables, batch['image'], capture_intermediates=True, mutable=["intermediates"], train=False)
@@ -178,6 +178,8 @@ if __name__ == "__main__":
   #                (os.path.join(BASE_DIR, 'nonliving26_400_epochs_ema_0.99_bn_0.99/'), 257, 26),
   #                (os.path.join(BASE_DIR, 'imagenet_ema_0.99_bn_0.99/'), 8, 1000)
   #                ]
+
+  model_metadata = [("gs://representation_clustering/living17_shuffle_vgg16_with_ln", 81, 17)]
 
   overcluster_factors = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
   normalize_embeddings = True
