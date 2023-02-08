@@ -141,18 +141,18 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
 
 
 def evaluate_purity_across_layers(ckpt_number, seed=1):
-  dataset_type = "entity13_4_subclasses"
-  shuffle_subclasses = False
-  #model_dir = f"gs://representation_clustering/{dataset_type}_vgg16_with_bn_seed_{seed}/"
-  model_dir = f"gs://representation_clustering/NEW_entity13_4_subclasses_vgg16_with_ln_seed_2/"
-  num_subclasses = 4
-  #model_dir = f"gs://gresearch/representation-interpretability/breeds/{dataset_type}_400_epochs_ema_0.99_bn_0.99/"
-  #ckpt_number = 81
-  
-  if "shuffle" in model_dir:
-    assert(shuffle_subclasses == True)
+  dataset_type = "living17"
+  model_dir = f"gs://representation_clustering/{dataset_type}_fine_grained/"
+  print(f"################## EVALUATING ckpt_number={ckpt_number}, seed={seed} #################")
+
+  if '4_subclasses' in model_dir:
+    num_subclasses = 4
   else:
-    assert(shuffle_subclasses == False)
+    num_subclasses = -1
+  if "shuffle" in model_dir:
+    shuffle_subclasses = True
+  else:
+    shuffle_subclasses = False 
   if 'fine_grained' in model_dir:
     use_fine_grained_labels = True
   else:
