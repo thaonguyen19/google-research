@@ -131,7 +131,7 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
       read_config=read_config,
       decoders=None)
 
-  batch_size = 8
+  batch_size = 16
   eval_ds = eval_ds.filter(functools.partial(predicate, all_subclasses=all_subclasses))
   eval_ds = eval_ds.cache()
   eval_ds = eval_ds.map(eval_preprocess, num_parallel_calls=tf.data.experimental.AUTOTUNE)
@@ -141,17 +141,25 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
 
 
 def evaluate_purity_across_layers(ckpt_number, seed=1):
-  dataset_type = "entity13_4_subclasses_shuffle"
-  shuffle_subclasses = True
-  model_dir = f"gs://representation_clustering/{dataset_type}_vgg16_with_bn_seed_{seed}/"
+  dataset_type = "entity13_4_subclasses"
+  shuffle_subclasses = False
+  #model_dir = f"gs://representation_clustering/{dataset_type}_vgg16_with_bn_seed_{seed}/"
+  model_dir = f"gs://representation_clustering/NEW_entity13_4_subclasses_vgg16_with_ln_seed_2/"
   num_subclasses = 4
   #model_dir = f"gs://gresearch/representation-interpretability/breeds/{dataset_type}_400_epochs_ema_0.99_bn_0.99/"
   #ckpt_number = 81
+  
   if "shuffle" in model_dir:
     assert(shuffle_subclasses == True)
+  else:
+    assert(shuffle_subclasses == False)
+  if 'fine_grained' in model_dir:
+    use_fine_grained_labels = True
+  else:
+    use_fine_grained_labels = False
 
   dataset_type = dataset_type.split('_')[0] 
-  eval_ds, num_classes, train_subclasses = load_eval_ds(dataset_type, -1, num_subclasses, shuffle_subclasses)
+  eval_ds, num_classes, train_subclasses = load_eval_ds(dataset_type, -1, num_subclasses, shuffle_subclasses, use_fine_grained_labels=use_fine_grained_labels)
   config = get_config()
   learning_rate_fn = functools.partial(
       get_learning_rate,
@@ -272,5 +280,5 @@ def evaluate_purity_across_layers(ckpt_number, seed=1):
 
 if __name__ == "__main__":
   for ckpt_number in [81]:#[1,21,41,61]:
-    for seed in [1,2]:
+    for seed in [0]:
       evaluate_purity_across_layers(ckpt_number, seed=seed)
