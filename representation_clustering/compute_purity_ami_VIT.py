@@ -45,8 +45,8 @@ def predict(model, state, batch):
       "params": state.params if state.ema_params is None else state.ema_params,
       "batch_stats": state.batch_stats
   }
-  _, state = model.apply(variables, batch['image'], capture_intermediates=True, mutable=["intermediates"], train=False)
-  intermediates = state['intermediates']
+  _, intermediates = model.apply(variables, batch['image'], mutable=False, train=False) #capture_intermediates=True, mutable=["intermediates"], train=False)
+  #intermediates = state['intermediates']
   return intermediates #maybe return only the relevant intermediates
 
 
@@ -141,8 +141,8 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
 
 
 def evaluate_purity_across_layers(ckpt_number, seed=1):
-  dataset_type = "entity13_4_subclasses_shuffle"
-  model_dir = f"gs://representation_clustering/{dataset_type}_vit/"
+  dataset_type = "entity13_4_subclasses"
+  model_dir = f"gs://representation_clustering/{dataset_type}_vit_seed_2/"
   print(f"################## EVALUATING ckpt_number={ckpt_number}, seed={seed} #################")
 
   if '4_subclasses' in model_dir:
@@ -177,14 +177,19 @@ def evaluate_purity_across_layers(ckpt_number, seed=1):
   if 'vgg' in model_dir:
     layer_names = ['conv1_1', 'conv1_2', 'conv2_1', 'conv2_2', 'conv3_1', 'conv3_2', 'conv3_3', 
                         'conv4_1', 'conv4_2', 'conv4_3', 'conv5_1', 'conv5_2', 'conv5_3', 'fc6', 'fc7', 'fc8']
+  if 'vit' in model_dir:
+    layer_names = ['block00_+mlp', ]
   else:
     layer_names = ['stage1_block1', 'stage1_block2', 'stage1_block3', 'stage2_block1', 'stage2_block2', \
                    'stage2_block3', 'stage2_block4', 'stage3_block1', 'stage3_block2', 'stage3_block3', \
                    'stage3_block4', 'stage3_block5', 'stage3_block6', 'stage4_block1', 'stage4_block2', 'stage4_block3']
+
+  layer_names = []
+  for block_no in range(12):
+    for suffix in ['+mlp', '+sa']:
+      layer_names.append(f'block{block_no:02d}_{suffix}')
+
   for layer in layer_names:
-    if 'resnet18' in model_dir:
-      if not ('block1' in layer or 'block2' in layer):
-        continue
     print('########################', layer)
     all_layer_intermediates = {}
     all_subclass_labels = []
@@ -203,10 +208,10 @@ def evaluate_purity_across_layers(ckpt_number, seed=1):
           all_layer_intermediates[key] = []
         all_layer_intermediates[key].append(np.array(intermediates[key]['__call__'][0]).reshape(bs, -1))
       else:
-        stage, block = layer.split('_')
+        block, suffix = layer.split('_')
         if key not in all_layer_intermediates:
           all_layer_intermediates[key] = []
-        all_layer_intermediates[key].append(np.array(intermediates[stage][block]['__call__'][0]).reshape(bs, -1)) 
+        all_layer_intermediates[key].append(np.array(intermediates['encoder'][block][suffix]).reshape(bs, -1)) 
     for k, v in all_layer_intermediates.items():
       print(k, v[0].shape)
 

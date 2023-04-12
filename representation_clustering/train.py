@@ -44,6 +44,7 @@ import input_pipeline_breeds
 import input_pipeline_celebA
 import resnet_v1
 import vgg
+import vit
 
 
 class TrainState(train_state.TrainState):
@@ -92,21 +93,27 @@ def create_train_state(
   """
   if config.model_name == "resnet18":
     model_cls = resnet_v1.ResNet18
+  if config.model_name == "resnet34":
+    model_cls = resnet_v1.ResNet34
   elif config.model_name == "resnet50":
     model_cls = resnet_v1.ResNet50
   elif config.model_name == "vgg16":
     model_cls = vgg.VGG16
   elif config.model_name == "vgg19":
     model_cls = vgg.VGG19
+  elif config.model_name == 'vit':
+    model_cls = vit.Model
   else:
     raise ValueError(f"Model {config.model_name} not supported.")
   if "resnet" in config.model_name:
     model = model_cls(num_classes=num_classes,
                       batch_norm_decay=config.batch_norm_decay)
-  else:
+  elif 'vgg' in config.model_name:
     model = model_cls(num_classes=num_classes, include_bn=config.include_bn,
                       include_ln=config.include_ln,
                       batch_norm_decay=config.batch_norm_decay)
+  else:
+    model = model_cls(num_classes=num_classes, mlp_dim=4*224)
   variables = model.init(rng, jnp.ones(input_shape), train=False)
   params = variables["params"]
   if "batch_stats" in variables:

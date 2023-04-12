@@ -26,13 +26,13 @@ def get_config():
   config.dataset_type = "entity13"
   config.shuffle_subclasses = False
   config.num_classes = -1
-  config.num_subclasses = -1
+  config.num_subclasses = 4
   config.loss_fn = "cross_entropy"
   config.fine_grained_labels = False
   # This is the learning rate for batch size 256. The code scales it linearly
   # with the batch size. This is common for ImageNet and SGD.
-  config.model_name = "vgg16"
-  if config.model_name == "vgg16":
+  config.model_name = "vit"
+  if config.model_name == "vgg16" or config.model_name == "vit":
     config.learning_rate = 0.01
     config.include_bn = False
     config.include_ln = False
