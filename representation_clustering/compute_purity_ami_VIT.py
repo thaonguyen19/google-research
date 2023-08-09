@@ -141,6 +141,7 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
 
 
 def evaluate_purity_across_layers(ckpt_number, seed=1):
+<<<<<<< HEAD
   use_CLS_token = True
   dataset_type = "entity13_4_subclasses"
   model_dir = f"gs://representation_clustering/{dataset_type}_vit_tok/"

@@ -121,10 +121,13 @@ def create_train_state(
   else:
     batch_stats = {'':{'': 0}}
   parameter_overview.log_parameter_overview(params)
-  tx = optax.sgd(
-      learning_rate=learning_rate_fn,
-      momentum=config.sgd_momentum
-  )
+  if 'vit' in config.model_name:
+    tx = optax.adamw(learning_rate=learning_rate_fn)
+  else:
+    tx = optax.sgd(
+        learning_rate=learning_rate_fn,
+        momentum=config.sgd_momentum
+    )
   if config.ema_decay:
     ema_tx = optax.ema(config.ema_decay, debias=True)
   else:
