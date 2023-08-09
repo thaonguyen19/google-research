@@ -141,8 +141,8 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
 
 
 def evaluate_purity_across_layers(ckpt_number, seed=1):
-  dataset_type = "entity13_4_subclasses"
-  model_dir = f"gs://representation_clustering/{dataset_type}_vit_seed_2/"
+  dataset_type = "entity13_4_subclasses_shuffle"
+  model_dir = f"gs://representation_clustering/{dataset_type}_vit_tok/"
   print(f"################## EVALUATING ckpt_number={ckpt_number}, seed={seed} #################")
 
   if '4_subclasses' in model_dir:
