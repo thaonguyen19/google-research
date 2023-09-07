@@ -33,7 +33,7 @@ def get_config():
   # with the batch size. This is common for ImageNet and SGD.
   config.model_name = "vit"
   if config.model_name == "vgg16" or config.model_name == "vit":
-    config.learning_rate = 0.01
+    config.learning_rate = 0.001
     config.include_bn = False
     config.include_ln = False
   else:
@@ -43,7 +43,7 @@ def get_config():
   config.sgd_momentum = 0.9
   config.ema_decay = 0.99
   config.batch_norm_decay = 0.99
-  config.weight_decay = 0.0001
+  config.weight_decay = 0.1
   config.num_epochs = 400
   # If num_train_steps==-1 then the number of training steps is calculated from
   # num_epochs.

@@ -122,7 +122,7 @@ def create_train_state(
     batch_stats = {'':{'': 0}}
   parameter_overview.log_parameter_overview(params)
   if 'vit' in config.model_name:
-    tx = optax.adamw(learning_rate=learning_rate_fn)
+    tx = optax.adamw(learning_rate=learning_rate_fn, weight_decay=config.weight_decay)
   else:
     tx = optax.sgd(
         learning_rate=learning_rate_fn,
@@ -242,7 +242,7 @@ def train_step(model, state, batch,
     weight_l2 = sum(
         [jnp.sum(x**2) for x in weight_penalty_params if x.ndim > 1])
     weight_penalty = weight_decay * 0.5 * weight_l2
-    loss = loss + weight_penalty
+    #loss = loss + weight_penalty
     return loss, (new_variables["batch_stats"], logits)
 
   grad_fn = jax.value_and_grad(loss_function, has_aux=True)
