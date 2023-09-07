@@ -141,7 +141,9 @@ def load_eval_ds(dataset_type, num_classes, num_subclasses, shuffle_subclasses, 
 
 
 def evaluate_purity_across_layers(ckpt_number, seed=1):
-  dataset_type = "entity13_4_subclasses_shuffle"
+<<<<<<< HEAD
+  use_CLS_token = True
+  dataset_type = "entity13_4_subclasses"
   model_dir = f"gs://representation_clustering/{dataset_type}_vit_tok/"
   print(f"################## EVALUATING ckpt_number={ckpt_number}, seed={seed} #################")
 
@@ -211,7 +213,10 @@ def evaluate_purity_across_layers(ckpt_number, seed=1):
         block, suffix = layer.split('_')
         if key not in all_layer_intermediates:
           all_layer_intermediates[key] = []
-        all_layer_intermediates[key].append(np.array(intermediates['encoder'][block][suffix]).reshape(bs, -1)) 
+        if use_CLS_token:
+          all_layer_intermediates[key].append(np.array(intermediates['encoder'][block][suffix])[:,:,0])
+        else:
+          all_layer_intermediates[key].append(np.array(intermediates['encoder'][block][suffix]).reshape(bs, -1)) 
     for k, v in all_layer_intermediates.items():
       print(k, v[0].shape)
 
@@ -277,6 +282,11 @@ def evaluate_purity_across_layers(ckpt_number, seed=1):
         class_purity_file = class_purity_file.replace('.pkl', f'_ckpt_{ckpt_number}.pkl')
         clf_labels_file = clf_labels_file.replace('.pkl', f'_ckpt_{ckpt_number}.pkl')
         ami_file = ami_file.replace('.pkl', f'_ckpt_{ckpt_number}.pkl')
+      if use_CLS_token:
+        class_purity_file = class_purity_file.replace('.pkl', '_CLS_token.pkl')
+        ami_file = ami_file.replace('.pkl', '_CLS_token.pkl')
+        clf_labels_file = clf_labels_file.replace('.pkl', '_CLS_token.pkl')
+
       print(class_purity_file, clf_labels_file, ami_file)
       with gcloud_fs.open(class_purity_file, 'wb') as f:
         pickle.dump(purity_result_dict, f)
